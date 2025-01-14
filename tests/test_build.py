@@ -37,7 +37,7 @@ def test_build_2(test, tmpdir):
 
 
 def test_build_3(test, tmpdir):
-    with pytest.raises(SystemExit) as e:
+    with pytest.raises(SystemExit) as exc:
         parser = test
 
         temp_file_path = Path(tmpdir.join("test"))

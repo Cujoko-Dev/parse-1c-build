@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+"""Для импорта"""
+
+
 from loguru import logger
 
 from parse_1c_build.__about__ import __version__

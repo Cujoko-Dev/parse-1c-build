@@ -7,6 +7,8 @@ from parse_1c_build.__about__ import APP_AUTHOR, APP_NAME
 
 
 class Processor:
+    """Процессор"""
+
     def __init__(self, **kwargs):
         settings_file_path = get_path_attribute(
             kwargs,

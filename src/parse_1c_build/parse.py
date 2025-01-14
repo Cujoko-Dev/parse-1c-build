@@ -108,6 +108,8 @@ class Parser(Processor):
 
 
 def run(args) -> None:
+    """Запустить"""
+
     logger.enable("cjk_commons")
     logger.enable("commons_1c")
     logger.enable(__name__)
@@ -119,12 +121,14 @@ def run(args) -> None:
         input_file_path = Path(args.input[0])
         output_dir_path = None if args.output is None else Path(args.output)
         processor.run(input_file_path, output_dir_path)
-    except Exception as e:
-        logger.exception(e)
+    except Exception as exc:
+        logger.exception(exc)
         sys.exit(1)
 
 
 def add_subparser(subparsers) -> None:
+    """Добавить подпарсер"""
+
     desc = "Parse 1C:Enterprise file in a directory"
 
     subparser = subparsers.add_parser(

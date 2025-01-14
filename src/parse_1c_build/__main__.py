@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+"""Главный модуль"""
+
+
 import sys
 from pathlib import Path
 

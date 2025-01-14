@@ -127,6 +127,8 @@ class Builder(Processor):
 
 
 def run(args) -> None:
+    """Запустить"""
+
     logger.enable("cjk_commons")
     logger.enable("commons_1c")
     logger.enable(__name__)
@@ -138,12 +140,14 @@ def run(args) -> None:
         input_dir_path = Path(args.input[0])
         output_file_path = None if args.output is None else Path(args.output)
         processor.run(input_dir_path, output_file_path, args.do_not_backup)
-    except Exception as e:
-        logger.exception(e)
+    except Exception as exc:
+        logger.exception(exc)
         sys.exit(1)
 
 
 def add_subparser(subparsers) -> None:
+    """Добавить подпарсер"""
+
     desc = "Build files in a directory to 1C:Enterprise file"
 
     subparser = subparsers.add_parser(
