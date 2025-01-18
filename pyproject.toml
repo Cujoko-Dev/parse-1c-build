@@ -29,7 +29,7 @@ license = {text = "MIT"}
 name = "parse-1c-build"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "5.15.7"
+version = "5.15.8"
 
 [project.scripts]
 p1cb = "parse_1c_build.__main__:run"
