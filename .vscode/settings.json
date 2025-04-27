@@ -1,4 +1,3 @@
 {
-    "python.analysis.typeCheckingMode": "basic",
-    "python.defaultInterpreterPath": "E:\\Envs\\parse-1c-build\\Scripts\\python.exe"
+    "python.analysis.typeCheckingMode": "basic"
 }
