@@ -195,5 +195,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-.pdm-python
 pdm.lock
+.pdm.toml
+.pdm-python
