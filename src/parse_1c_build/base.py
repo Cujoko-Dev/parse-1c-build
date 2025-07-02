@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from pathlib import Path
 
 from cjk_commons.settings import get_attribute, get_path_attribute, get_settings

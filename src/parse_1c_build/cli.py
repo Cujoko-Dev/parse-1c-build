@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-
-"""CLI"""
-
-
 from argparse import ArgumentParser
 
 from cjk_commons.logging_ import add_logging_arguments

@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-
-"""Информация о пакете"""
-
-
 import importlib.metadata
 
 APP_AUTHOR = "util-1c"

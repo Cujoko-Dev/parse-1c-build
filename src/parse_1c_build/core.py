@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-
-"""Ядро"""
-
-
 import sys
 
 from cjk_commons.logging_ import add_loggers
