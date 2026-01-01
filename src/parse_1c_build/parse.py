@@ -41,7 +41,7 @@ class Parser(Processor):
         )
         return result
 
-    def run(self, input_file_path: Path, output_dir_path: Path = None) -> None:
+    def run(self, input_file_path: Path, output_dir_path: Path | None = None) -> None:
         """Разбирает обработку на исходные файлы"""
 
         input_file_path_suffix_lower = input_file_path.suffix.lower()

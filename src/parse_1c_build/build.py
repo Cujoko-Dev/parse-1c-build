@@ -40,7 +40,7 @@ class Builder(Processor):
     def run(
         self,
         input_dir_path: Path,
-        output_path: Path = None,
+        output_path: Path | None = None,
         do_not_backup: bool = False,
     ) -> None:
         """Собирает обработку из исходных файлов"""
