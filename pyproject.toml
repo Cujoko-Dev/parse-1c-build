@@ -11,6 +11,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: Russian",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.11",
@@ -36,3 +37,10 @@ p1cb = "parse_1c_build.__main__:run"
 
 [project.urls]
 repository = "https://github.com/Cujoko-Dev/parse-1c-build"
+
+[tool.pdm]
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "debugpy>=1.8.2",
+]
