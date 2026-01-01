@@ -45,5 +45,5 @@ def test_build_3(test, tmpdir):
         )
         build_run(args)
 
-        assert e.type == SystemExit
-        assert e.value.code == 1
+        assert exc.type == SystemExit
+        assert exc.value.code == 1
