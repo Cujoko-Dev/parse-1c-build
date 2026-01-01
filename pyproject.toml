@@ -38,9 +38,8 @@ p1cb = "parse_1c_build.__main__:run"
 [project.urls]
 repository = "https://github.com/Cujoko-Dev/parse-1c-build"
 
-[tool.pdm]
-
-[tool.pdm.dev-dependencies]
+[dependency-groups]
 dev = [
     "debugpy>=1.8.2",
+    "pytest>=9.0.2",
 ]
