@@ -12,19 +12,6 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Python: Remote Attach",
-            "type": "python",
-            "request": "attach",
-            "port": 5678,
-            "host": "localhost",
-            "pathMappings": [
-                {
-                    "localRoot": "${workspaceFolder}",
-                    "remoteRoot": "."
-                }
-            ]
-        },
-        {
             "name": "Python: Module",
             "type": "python",
             "request": "launch",
@@ -65,6 +52,50 @@
             "request": "launch",
             "program": "${file}",
             "console": "externalTerminal"
+        },
+        {
+            // Запускать скрипт для отладки надо так: "python -m debugpy --connect 56789 -m <модуль>"
+            // Или так: 
+            // import debugpy
+            // 
+            // debugpy.connect(("localhost", 56789))
+            
+            "listen": {
+                "host": "localhost",
+                "port": 56789
+            },
+            "name": "Python Debugger: Remote Attach (listen localhost:56789)",
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "."
+                }
+            ],
+            "request": "attach",
+            "type": "debugpy"
+        },
+        {
+            // Запускать скрипт для отладки надо так: "python -m debugpy --listen 56789 -m <модуль>"
+            // Или так: 
+            // import debugpy
+            // 
+            // debugpy.listen(("localhost", 56789))
+            // print("Waiting for debugger...")
+            // debugpy.wait_for_client()
+            
+            "connect": {
+                "host": "localhost",
+                "port": 56789
+            },
+            "name": "Python Debugger: Remote Attach (connect localhost:56789)",
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "."
+                }
+            ],
+            "request": "attach",
+            "type": "debugpy"
         }
     ]
 }
