@@ -15,7 +15,7 @@ def test_parse(test, tmpdir):
     parser = test
 
     temp_dir_path = Path(tmpdir)
-    args = parser.parse_args(f"parse tests/data/test.epf {temp_dir_path}".split())
+    args = parser.parse_args(f"parse src/tests/data/test.epf {temp_dir_path}".split())
 
     parse_run(args)
 
