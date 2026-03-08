@@ -6,21 +6,21 @@
     "configurations": [
         {
             "name": "Python: Current File (Integrated Terminal)",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
         },
         {
             "name": "Python: Module",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "enter-your-module-name-here",
             "console": "integratedTerminal"
         },
         {
             "name": "Python: Django",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",
             "console": "integratedTerminal",
@@ -33,7 +33,7 @@
         },
         {
             "name": "Python: Flask",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "flask",
             "env": {
@@ -48,7 +48,7 @@
         },
         {
             "name": "Python: Current File (External Terminal)",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "externalTerminal"
