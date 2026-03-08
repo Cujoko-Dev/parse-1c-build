@@ -47,7 +47,7 @@ class Processor:
 
 def add_generic_arguments(subparser) -> None:
     subparser.add_argument(
-        "-r",
+        "-u",
         "--use-reader",
         action="store_true",
         help="Parse or build with V8Reader",
