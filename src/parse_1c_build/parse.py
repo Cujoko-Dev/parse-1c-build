@@ -65,6 +65,15 @@ class Parser(Processor):
                         f'"{self.get_1c_exe_file_path()}" /F "{self.get_ib_dir_path()}" /DisableStartupMessages /Execute "{self.get_v8_reader_file_path()}" {command}'
                     )
 
+                exit_code = subprocess.call(
+                    [bat_file.name], stdout=open(os.devnull, "w")
+                )
+                if exit_code:
+                    raise Exception(
+                        f"parsing '{input_file_path}' with V8Reader failed",
+                        exit_code,
+                    )
+
                 Path(bat_file.name).unlink()
             else:
                 args_au = [
@@ -114,7 +123,7 @@ def run(args) -> None:
     logger.enable(__name__)
 
     try:
-        processor = Parser()
+        processor = Parser(**vars(args))
 
         # Args
         input_file_path = Path(args.input[0])
