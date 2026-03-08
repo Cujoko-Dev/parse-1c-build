@@ -9,6 +9,7 @@ from cjk_commons.settings import get_path_attribute
 from commons_1c import platform_
 from loguru import logger
 
+from parse_1c_build import bsl
 from parse_1c_build.base import Processor, add_generic_arguments
 
 logger.disable(__name__)
@@ -41,7 +42,12 @@ class Parser(Processor):
         )
         return result
 
-    def run(self, input_file_path: Path, output_dir_path: Path | None = None) -> None:
+    def run(
+        self,
+        input_file_path: Path,
+        output_dir_path: Path | None = None,
+        raw: bool = False,
+    ) -> None:
         """Разбирает обработку на исходные файлы"""
 
         input_file_path_suffix_lower = input_file_path.suffix.lower()
@@ -87,6 +93,9 @@ class Parser(Processor):
                 if exit_code:
                     raise Exception(f"parsing '{input_file_path}' failed", exit_code)
 
+                if not raw:
+                    bsl.split_dir(output_dir_path)
+
             logger.info(f"'{input_file_path}' parsed to '{output_dir_path}'")
         elif input_file_path_suffix_lower in [".md", ".ert"]:
             input_file_path_ = input_file_path  # todo
@@ -128,7 +137,7 @@ def run(args) -> None:
         # Args
         input_file_path = Path(args.input[0])
         output_dir_path = None if args.output is None else Path(args.output)
-        processor.run(input_file_path, output_dir_path)
+        processor.run(input_file_path, output_dir_path, args.raw)
     except Exception as exc:
         logger.exception(exc)
         sys.exit(1)
@@ -149,3 +158,10 @@ def add_subparser(subparsers) -> None:
     subparser.set_defaults(func=run)
 
     add_generic_arguments(subparser)
+
+    subparser.add_argument(
+        "-r",
+        "--raw",
+        action="store_true",
+        help="Parse to raw source files",
+    )

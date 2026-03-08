@@ -7,6 +7,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from parse_1c_build import bsl
 from parse_1c_build.base import Processor, add_generic_arguments
 
 logger.disable(__name__)
@@ -84,9 +85,22 @@ class Builder(Processor):
 
             if self.use_reader:
                 temp_source_dir_path = Builder.get_temp_source_dir_path(input_dir_path)
+
                 args_au += [str(temp_source_dir_path)]
             else:
-                args_au += [str(input_dir_path)]
+                bsl_files = list(input_dir_path.rglob("*.bsl"))
+
+                if bsl_files:
+                    temp_dir_path = Path(tempfile.mkdtemp())
+                    temp_source_dir_path = temp_dir_path / input_dir_path.name
+
+                    shutil.copytree(input_dir_path, temp_source_dir_path)
+
+                    bsl.merge_dir(temp_source_dir_path)
+
+                    args_au += [str(temp_source_dir_path)]
+                else:
+                    args_au += [str(input_dir_path)]
 
             args_au += [str(output_file_path)]
 
