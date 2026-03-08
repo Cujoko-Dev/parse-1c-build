@@ -18,7 +18,7 @@ def test_build_1(test, tmpdir):
 
     temp_file_path = Path(tmpdir.join("test.epf"))
     args = parser.parse_args(
-        f"build src/tests/data/test_epf_src {temp_file_path}".split()
+        f"build tests/data/test_epf_src {temp_file_path}".split()
     )
     build_run(args)
 
@@ -32,7 +32,7 @@ def test_build_2(test, tmpdir):
 
         temp_file_path = Path(tmpdir.join("test"))
         args = parser.parse_args(
-            f"build tests/data/test_epf_src {temp_file_path}".split()
+            f"build tests/data/test_epf_src {temp_file_path}".split(),
         )
         build_run(args)
 
