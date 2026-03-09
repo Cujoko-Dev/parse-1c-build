@@ -366,6 +366,63 @@ def _unique_bsl_name(root: Path, base_name: str) -> str:
     return f"{base_name}_{n}.bsl"
 
 
+def _write_bsl_renames_file(
+    root: Path, renames_entries: list[tuple[str, str]]
+) -> None:
+    """Write meta/bsl_renames.txt from (bsl_filename, companion_rel) list."""
+    if not renames_entries:
+        return
+    meta_path = root / META_DIRNAME
+    meta_path.mkdir(exist_ok=True)
+    path = meta_path / BSL_RENAMES_FILENAME
+    with path.open("w", encoding="utf-8") as f:
+        for bsl_name, companion in renames_entries:
+            f.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
+
+
+def _apply_bin_layout(root: Path) -> None:
+    """Move all non-BSL, non-meta content under bin/; write renames.txt; update bsl_renames with bin/ prefix."""
+    bin_path = root / BIN_DIRNAME
+    bin_path.mkdir(exist_ok=True)
+    for p in list(root.iterdir()):
+        if p.name in (META_DIRNAME, BIN_DIRNAME):
+            continue
+        if p.is_file() and p.suffix.lower() == ".bsl":
+            continue
+        dest = bin_path / p.name
+        if p.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            p.rename(dest)
+        else:
+            shutil.move(str(p), str(dest))
+    renames_txt_entries: list[tuple[str, str]] = []
+    for p in bin_path.rglob("*"):
+        if p.is_dir():
+            continue
+        rel = p.relative_to(root)
+        rel_str = str(rel).replace("\\", "/")
+        prefix = BIN_DIRNAME + "/"
+        target = rel_str[len(prefix) :] if rel_str.startswith(prefix) else rel_str
+        renames_txt_entries.append((target, rel_str))
+    meta_path = root / META_DIRNAME
+    renames_txt_path = meta_path / "renames.txt"
+    with renames_txt_path.open("w", encoding="utf-8") as f:
+        for target, source in sorted(renames_txt_entries, key=lambda x: x[0]):
+            f.write(f"{target}{RENAMES_ARROW}{source}\n")
+    bsl_renames_path = meta_path / BSL_RENAMES_FILENAME
+    with bsl_renames_path.open("r", encoding="utf-8") as rf:
+        lines = rf.readlines()
+    with bsl_renames_path.open("w", encoding="utf-8") as wf:
+        for line in lines:
+            line = line.strip()
+            if RENAMES_ARROW not in line:
+                continue
+            bsl_name, companion = line.split(RENAMES_ARROW, 1)
+            bsl_name, companion = bsl_name.strip(), companion.strip()
+            wf.write(f"{bsl_name}{RENAMES_ARROW}{BIN_DIRNAME}/{companion}\n")
+
+
 def split_dir(
     dir_path: Path,
     use_form_names: bool = True,
@@ -432,54 +489,9 @@ def split_dir(
             if renames_entry is not None:
                 renames_entries.append(renames_entry)
 
-    if renames_entries:
-        meta_path = root / META_DIRNAME
-        meta_path.mkdir(exist_ok=True)
-        renames_path = meta_path / BSL_RENAMES_FILENAME
-        with renames_path.open("w", encoding="utf-8") as f:
-            for bsl_name, companion in renames_entries:
-                f.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
-
+    _write_bsl_renames_file(root, renames_entries)
     if use_bin_layout and count and (root / META_DIRNAME / BSL_RENAMES_FILENAME).exists():
-        bin_path = root / BIN_DIRNAME
-        bin_path.mkdir(exist_ok=True)
-        for p in list(root.iterdir()):
-            if p.name == META_DIRNAME or p.name == BIN_DIRNAME:
-                continue
-            if p.is_file() and p.suffix.lower() == ".bsl":
-                continue
-            dest = bin_path / p.name
-            if p.is_dir():
-                if dest.exists():
-                    shutil.rmtree(dest)
-                p.rename(dest)
-            else:
-                shutil.move(str(p), str(dest))
-        renames_txt_entries = []
-        for p in bin_path.rglob("*"):
-            if p.is_dir():
-                continue
-            rel = p.relative_to(root)
-            rel_str = str(rel).replace("\\", "/")
-            prefix = BIN_DIRNAME + "/"
-            target = rel_str[len(prefix):] if rel_str.startswith(prefix) else rel_str
-            renames_txt_entries.append((target, rel_str))
-        meta_path = root / META_DIRNAME
-        renames_txt_path = meta_path / "renames.txt"
-        with renames_txt_path.open("w", encoding="utf-8") as f:
-            for target, source in sorted(renames_txt_entries, key=lambda x: x[0]):
-                f.write(f"{target}{RENAMES_ARROW}{source}\n")
-        bsl_renames_path = meta_path / BSL_RENAMES_FILENAME
-        with bsl_renames_path.open("r", encoding="utf-8") as f:
-            lines = f.readlines()
-        with bsl_renames_path.open("w", encoding="utf-8") as f:
-            for line in lines:
-                line = line.strip()
-                if RENAMES_ARROW not in line:
-                    continue
-                bsl_name, companion = line.split(RENAMES_ARROW, 1)
-                bsl_name, companion = bsl_name.strip(), companion.strip()
-                f.write(f"{bsl_name}{RENAMES_ARROW}{BIN_DIRNAME}/{companion}\n")
+        _apply_bin_layout(root)
 
     if count:
         logger.info(f"Extracted BSL from {count} file(s) in '{dir_path}'")
