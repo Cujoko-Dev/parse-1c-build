@@ -79,44 +79,6 @@ def test():
     return parser
 
 
-def test_build_roundtrip_epf_byte_identical(test, tmpdir):
-    """
-    Разобрать test.epf, собрать в test_build.epf и сравнить с оригиналом побайтово.
-    Побайтовое совпадение может не выполняться из-за метаданных v8unpack (заголовки, время).
-    Эквивалентность содержимого проверяет test_build_roundtrip_raw_sources_identical.
-    """
-    parser = test
-    tests_dir = Path(__file__).parent
-    sample_epf = tests_dir / "data" / "test.epf"
-    if not sample_epf.is_file():
-        pytest.skip(f"Образцовый файл отсутствует: {sample_epf}")
-
-    tmp = Path(tmpdir)
-    parsed_dir = tmp / "test_epf_src"
-    built_epf = tmp / "test_build.epf"
-
-    args_parse = parser.parse_args(
-        ["parse", str(sample_epf), str(parsed_dir)]
-    )
-    parse_run(args_parse)
-
-    args_build = parser.parse_args(
-        ["build", str(parsed_dir), str(built_epf), "-x"]
-    )
-    build_run(args_build)
-
-    assert built_epf.is_file(), "Собранный EPF не создан"
-    built_bytes = built_epf.read_bytes()
-    assert len(built_bytes) > 0, "Собранный EPF пустой"
-    sample_bytes = sample_epf.read_bytes()
-    if sample_bytes != built_bytes:
-        # v8unpack -B может писать отличные метаданные; содержимое проверяется по raw roundtrip
-        pytest.skip(
-            "Собранный EPF побайтово отличается от образца (типично для v8unpack); "
-            "эквивалентность по содержимому проверяет test_build_roundtrip_raw_sources_identical"
-        )
-
-
 def test_build_roundtrip_raw_sources_identical(test, tmpdir):
     """
     Разобрать test.epf (без --raw), собрать test_build.epf, разобрать test_build.epf с --raw
