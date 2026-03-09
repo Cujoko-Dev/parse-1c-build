@@ -1,9 +1,12 @@
 ---
-description: Run tests after code changes; do not modify tests unless asked
+description: Virtual environment, test runner, and testing workflow
 alwaysApply: true
 ---
 
-# Testing Workflow
+# Environment & Testing
 
+- **Virtual environment**: Always activate `.venv` before running Python or tests.
+- **Tests**: Run tests using `scripts/test.ps1` (do not call Python directly from `.venv/Scripts`).
+- **Test runner**: Use pytest as the test runner.
 - **After modifying code**: Always run `scripts/test.ps1` to verify changes.
-- **Tests**: Never change test files unless the user explicitly asks to do so.
+- **Test files**: Never change test files unless the user explicitly asks to do so.
