@@ -1,0 +1,9 @@
+---
+description: Run tests after code changes; do not modify tests unless asked
+alwaysApply: true
+---
+
+# Testing Workflow
+
+- **After modifying code**: Always run `scripts/test.ps1` to verify changes.
+- **Tests**: Never change test files unless the user explicitly asks to do so.
