@@ -27,6 +27,16 @@ logger.disable(__name__)
 BSL_PLACEHOLDER = "<BSL_MODULE_PLACEHOLDER>"
 
 
+def _write_text_no_newline_translate(path: Path, text: str, encoding: str) -> None:
+    """Записать текст без подмены \\n на os.linesep (побайтовое совпадение с образцом)."""
+    path.write_bytes(text.encode(encoding))
+
+
+def _read_text_preserve_newlines(path: Path, encoding: str = "utf-8-sig") -> str:
+    """Прочитать текст без преобразования \\r/\\n (read_text даёт universal newlines и портит \\r)."""
+    return path.read_bytes().decode(encoding)
+
+
 # Regex for 1C internal tuple (form). Literally from V8Reader ПолучитьСтрокиМодуляУФ:
 # Pattern: (\{\n?)|("(""|[^"]*)*")|([^},\{]+)|(,\n?)|(\}\n?)
 # 1C SubMatches are 1-based: (1)=open, (2)=string, (3)=other, (4)=comma, (5)=close
@@ -108,8 +118,9 @@ def _find_form_module_by_tuple(content: str) -> tuple[str, int, int, int, int] |
         return None
 
     # ТекстМодуля = Значение; Прав(..., СтрДлина - 1) и Лев(..., СтрДлина - 1) = strip quotes
+    # Сохраняем \r как в оригинале (1C использует CR в строках кортежа), иначе roundtrip искажает файл.
     raw = value
-    body = raw[1:-1].replace('""', '"').replace("\r", "\n")
+    body = raw[1:-1].replace('""', '"')
 
     return (body, value_span[0], value_span[1], start_line, end_line)
 
@@ -171,9 +182,18 @@ def _find_placeholder_string(content: str) -> tuple[int, int] | None:
 def split_file(path: Path) -> bool:
     """Extract BSL code embedded in *path* into a companion ``path.bsl`` file."""
     try:
-        content = path.read_text(encoding="utf-8-sig")
-    except (UnicodeDecodeError, OSError):
+        raw = path.read_bytes()
+    except OSError:
         return False
+    has_bom = raw.startswith(b"\xef\xbb\xbf")
+    try:
+        content = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return False
+
+    # Сохраняем BOM при записи и не подменяем \n (побайтовое совпадение с образцом).
+    encoding = "utf-8-sig" if has_bom else "utf-8"
+    _write_text = lambda p, s: _write_text_no_newline_translate(p, s, encoding)
 
     if path.name == "module" or path.name == "text":
         # "module" files (form module) are usually plain BSL; if content looks like
@@ -184,9 +204,9 @@ def split_file(path: Path) -> bool:
             code = content
 
             bsl_path = path.with_name(path.name + ".bsl")
-            bsl_path.write_text(code, encoding="utf-8-sig")
+            _write_text(bsl_path, code)
 
-            path.write_text(BSL_PLACEHOLDER, encoding="utf-8-sig")
+            _write_text(path, BSL_PLACEHOLDER)
 
             logger.debug(f"Extracted BSL from '{path}' → '{bsl_path}' (plain module)")
 
@@ -199,14 +219,14 @@ def split_file(path: Path) -> bool:
             code, replace_start, replace_end, _line_start, _line_end = form_result
 
             bsl_path = path.with_name(path.name + ".bsl")
-            bsl_path.write_text(code, encoding="utf-8-sig")
+            _write_text(bsl_path, code)
 
             placeholder_in_file = f'"{BSL_PLACEHOLDER}"'
 
             new_content = (
                 content[:replace_start] + placeholder_in_file + content[replace_end:]
             )
-            path.write_text(new_content, encoding="utf-8-sig")
+            _write_text(path, new_content)
 
             logger.debug(f"Extracted BSL from '{path}' → '{bsl_path}'")
 
@@ -232,20 +252,29 @@ def merge_file(bsl_path: Path) -> bool:
 
         return False
 
-    code = bsl_path.read_text(encoding="utf-8-sig")
-
     try:
-        content = base_path.read_text(encoding="utf-8-sig")
-    except (UnicodeDecodeError, OSError):
+        base_raw = base_path.read_bytes()
+    except OSError:
         logger.warning(f"Cannot read base file '{base_path}' — skipping")
-
         return False
+    has_bom = base_raw.startswith(b"\xef\xbb\xbf")
+    try:
+        content = base_raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        logger.warning(f"Cannot decode base file '{base_path}' — skipping")
+        return False
+
+    code = _read_text_preserve_newlines(bsl_path)
+
+    # Сохраняем BOM при записи и не подменяем \n.
+    encoding = "utf-8-sig" if has_bom else "utf-8"
+    _write_text = lambda p, s: _write_text_no_newline_translate(p, s, encoding)
 
     # "module" and "text" files: whole file is the placeholder, replace entirely with .bsl content.
     if (
         base_path.name == "module" or base_path.name == "text"
     ) and content.strip() == BSL_PLACEHOLDER:
-        base_path.write_text(code, encoding="utf-8-sig")
+        _write_text(base_path, code)
 
         logger.debug(f"Merged BSL from '{bsl_path}' → '{base_path}' (plain module)")
 
@@ -277,7 +306,7 @@ def merge_file(bsl_path: Path) -> bool:
         # Legacy empty string: start/end are body bounds.
         new_content = content[:start] + escaped_code + content[end:]
 
-    base_path.write_text(new_content, encoding="utf-8-sig")
+    _write_text(base_path, new_content)
 
     logger.debug(f"Merged BSL from '{bsl_path}' → '{base_path}'")
 
