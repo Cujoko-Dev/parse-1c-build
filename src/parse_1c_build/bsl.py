@@ -7,8 +7,9 @@ string inside a 1C tuple, e.g.:
     КонецПроцедуры
     ",0}
 
-For form files (name "form" or managed form "UUID.0"), the module is the 3rd element
-of the root tuple; extraction uses the same logic as V8Reader (ПолучитьСтрокиМодуляУФ).
+For managed form files (UUID.0 only), the module is the 3rd element of the root tuple;
+extraction uses the same logic as V8Reader (ПолучитьСтрокиМодуляУФ). Files named "form"
+are ordinary form files and are not processed (they do not contain form module text).
 
 split_file / split_dir extract the code into a companion .bsl file and leave a
 placeholder in the original.  merge_file / merge_dir do the reverse before the
@@ -17,6 +18,7 @@ file is fed back to v8unpack.
 
 import re
 from pathlib import Path
+from typing import Callable
 
 from loguru import logger
 
@@ -26,32 +28,60 @@ logger.disable(__name__)
 # Must be unique so merge can find it and substitute the .bsl content.
 BSL_PLACEHOLDER = "<BSL_MODULE_PLACEHOLDER>"
 
-
-def _write_text_no_newline_translate(path: Path, text: str, encoding: str) -> None:
-    """Записать текст без подмены \\n на os.linesep (побайтовое совпадение с образцом)."""
-    path.write_bytes(text.encode(encoding))
-
-
-def _read_text_preserve_newlines(path: Path, encoding: str = "utf-8-sig") -> str:
-    """Прочитать текст без преобразования \\r/\\n (read_text даёт universal newlines и портит \\r)."""
-    return path.read_bytes().decode(encoding)
-
+# Forms that start with this (e.g. spreadsheet/document) have no BSL module in the file.
+MOXCEL_FORM_PREFIX = "MOXCEL"
 
 # Regex for 1C internal tuple (form). Literally from V8Reader ПолучитьСтрокиМодуляУФ:
 # Pattern: (\{\n?)|("(""|[^"]*)*")|([^},\{]+)|(,\n?)|(\}\n?)
+# Use \r?\n? so files written with CRLF on Windows are parsed correctly.
 # 1C SubMatches are 1-based: (1)=open, (2)=string, (3)=other, (4)=comma, (5)=close
 _RE_FORM_TUPLE = re.compile(
-    r'(\{\n?)|("(?:""|[^"]*)*")|([^},\{]+)|(,\n?)|(\}\n?)',
+    r'(\{\r?\n?)|("(?:""|[^"]*)*")|([^},\{]+)|(,\r?\n?)|(\}\r?\n?)',
     re.MULTILINE,
 )
 
 # Managed form file name: UUID.0 (e.g. 011e7aea-f182-4640-aaad-f8abe975274c.0)
 _RE_MANAGED_FORM_FILE = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.0$"
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+    r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.0$"
 )
 
-# Forms that start with this (e.g. spreadsheet/document) have no BSL module in the file.
-MOXCEL_FORM_PREFIX = "MOXCEL"
+
+def _write_text_no_newline_translate(
+    path: Path, text: str, encoding: str
+) -> None:
+    """Записать текст без подмены \\n на os.linesep (побайтовое совпадение с образцом)."""
+    path.write_bytes(text.encode(encoding))
+
+
+def _read_text_preserve_newlines(
+    path: Path, encoding: str = "utf-8-sig"
+) -> str:
+    """Прочитать текст без преобразования \\r/\\n (read_text даёт universal newlines)."""
+    return path.read_bytes().decode(encoding)
+
+
+def _read_file_content(path: Path) -> tuple[str, str] | None:
+    """Read file as UTF-8, return (content, encoding) or None on error.
+
+    encoding is 'utf-8-sig' if file has BOM, else 'utf-8'.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    has_bom = raw.startswith(b"\xef\xbb\xbf")
+    try:
+        content = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return None
+    encoding = "utf-8-sig" if has_bom else "utf-8"
+    return (content, encoding)
+
+
+def _writer_for_encoding(encoding: str) -> Callable[[Path, str], None]:
+    """Return a (path, text) -> None writer that uses the given encoding."""
+    return lambda p, s: _write_text_no_newline_translate(p, s, encoding)
 
 
 def _is_managed_form_file(path: Path) -> bool:
@@ -59,17 +89,18 @@ def _is_managed_form_file(path: Path) -> bool:
     return _RE_MANAGED_FORM_FILE.match(path.name) is not None
 
 
-def _find_form_module_by_tuple(content: str) -> tuple[str, int, int, int, int] | None:
+def _find_form_module_by_tuple(
+    content: str, element_index: int = 2
+) -> tuple[str, int, int, int, int] | None:
     """Literal port of V8Reader ПолучитьСтрокиМодуляУФ (form_module.bsl lines 4862–4912).
 
-    Finds form module as 3rd element of root tuple (ИндексРодителя = "0", Индекс = 2).
+    Finds BSL module as (element_index+1)-th element of root tuple (ИндексРодителя = "0").
+    Form module = 3rd element (element_index=2); object module = 4th (element_index=3).
     Same order of checks: comma (4), open (1), close (5), else value (3=other, 2=string).
     Same line counting and text post-processing (strip quotes, ""→", ВК→ПС).
     Returns (code, start_pos, end_pos, start_line, end_line) or None.
     """
-    # НомерСтроки = 1; Уровень = 0; ИндексРодителя = ""; Индекс = 0
     line_no = 1
-    # ИндексРодителя — строка "0" или "0:1" и т.д. (путь индексов при входе во вложенные кортежи)
     index_parent = ""
     current_index = 0
     start_line = 0
@@ -78,38 +109,29 @@ def _find_form_module_by_tuple(content: str) -> tuple[str, int, int, int, int] |
     value_span: tuple[int, int] | None = None
 
     for m in _RE_FORM_TUPLE.finditer(content):
-        # Если ИндексРодителя = "0" И Индекс = 2 Тогда НачальнаяСтрока = НомерСтроки
-        if index_parent == "0" and current_index == 2:
+        if index_parent == "0" and current_index == element_index:
             start_line = line_no
 
-        # Если Match.SubMatches(4) <> Неопределено Тогда  (comma)
         if m.group(4) is not None:
             current_index += 1
             line_no += m.group(4).count("\n")
-        # ИначеЕсли Match.SubMatches(0) <> Неопределено Тогда  (open brace)
         elif m.group(1) is not None:
-            # ИндексРодителя = ?(ИндексРодителя = "", "", ИндексРодителя + ":") + Индекс
             index_parent = (index_parent + ":" if index_parent else "") + str(
                 current_index
             )
             current_index = 0
             line_no += m.group(1).count("\n")
-        # ИначеЕсли Match.SubMatches(5) <> Неопределено Тогда  (close brace)
         elif m.group(5) is not None:
             if index_parent:
-                # МассивИндексовРодителя = СтрЗаменить(ИндексРодителя, ":", ПС); Индекс = последний
-                # элемент
                 parts = index_parent.split(":")
                 current_index = int(parts[-1])
-                # ИндексРодителя без последнего элемента
                 index_parent = ":".join(parts[:-1])
             line_no += m.group(5).count("\n")
-        # Иначе  (value: other or string)
         else:
-            if m.group(3) is not None:  # SubMatches(3) = other
+            if m.group(3) is not None:
                 value = m.group(3)
                 line_no += m.group(3).count("\n") + m.group(3).count("\r")
-            else:  # SubMatches(1) = string (in 1C SubMatches(1))
+            else:
                 value = m.group(2)
                 value_span = (m.start(), m.end())
                 line_no += m.group(2).count("\n")
@@ -120,10 +142,10 @@ def _find_form_module_by_tuple(content: str) -> tuple[str, int, int, int, int] |
     if value is None or value_span is None or start_line == 0:
         return None
 
-    # ТекстМодуля = Значение; Прав(..., СтрДлина - 1) и Лев(..., СтрДлина - 1) = strip quotes
-    # Сохраняем \r как в оригинале (1C использует CR в строках кортежа), иначе roundtrip искажает файл.
     raw = value
     body = raw[1:-1].replace('""', '"')
+    if not body:
+        return None
 
     return (body, value_span[0], value_span[1], start_line, end_line)
 
@@ -142,16 +164,13 @@ def _find_empty_string(content: str) -> tuple[int, int] | None:
     while i < n:
         if content[i] != '"':
             i += 1
-
             continue
 
         j = i + 1
         if j < n and content[j] == '"':
-            # Two adjacent quotes: empty string only if the third char is NOT '"'.
             if j + 1 >= n or content[j + 1] != '"':
                 return (i + 1, j)
 
-        # Not an empty string — skip to the end of this string.
         j = i + 1
         while j < n:
             if content[j] == '"':
@@ -161,82 +180,72 @@ def _find_empty_string(content: str) -> tuple[int, int] | None:
                     break
             else:
                 j += 1
-
         i = j + 1
 
     return None
 
 
 def _find_placeholder_string(content: str) -> tuple[int, int] | None:
-    """Return (start, end) of the full placeholder token '"<BSL_MODULE_PLACEHOLDER>"'.
+    """Return (start, end) of the full placeholder '"<BSL_MODULE_PLACEHOLDER>"'.
 
     Replacing content[start:end] with '"' + escaped_code + '"' restores the
     module string in the file.
     """
     marker = f'"{BSL_PLACEHOLDER}"'
     idx = content.find(marker)
-
     if idx == -1:
         return None
-
     return (idx, idx + len(marker))
+
+
+def _extract_plain_module(path: Path, content: str, write: Callable[[Path, str], None]) -> bool:
+    """Handle 'module' or 'text' file with plain BSL (no tuple). Return True if done."""
+    bsl_path = path.with_name(path.name + ".bsl")
+    write(bsl_path, content)
+    write(path, BSL_PLACEHOLDER)
+    logger.debug(f"Extracted BSL from '{path}' → '{bsl_path}' (plain module)")
+    return True
+
+
+def _extract_managed_form(
+    path: Path, content: str, write: Callable[[Path, str], None]
+) -> bool:
+    """Handle managed form (UUID.0) with BSL in tuple. Return True if extracted."""
+    if content.startswith(MOXCEL_FORM_PREFIX):
+        return False
+
+    form_result = _find_form_module_by_tuple(content)
+    if form_result is None:
+        return False
+
+    code, replace_start, replace_end, _line_start, _line_end = form_result
+    bsl_path = path.with_name(path.name + ".bsl")
+    write(bsl_path, code)
+
+    placeholder_in_file = f'"{BSL_PLACEHOLDER}"'
+    new_content = (
+        content[:replace_start] + placeholder_in_file + content[replace_end:]
+    )
+    write(path, new_content)
+    logger.debug(f"Extracted BSL from '{path}' → '{bsl_path}'")
+    return True
 
 
 def split_file(path: Path) -> bool:
     """Extract BSL code embedded in *path* into a companion ``path.bsl`` file."""
-    try:
-        raw = path.read_bytes()
-    except OSError:
+    result = _read_file_content(path)
+    if result is None:
         return False
-    has_bom = raw.startswith(b"\xef\xbb\xbf")
-    try:
-        content = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return False
+    content, encoding = result
+    write = _writer_for_encoding(encoding)
 
-    # Сохраняем BOM при записи и не подменяем \n (побайтовое совпадение с образцом).
-    encoding = "utf-8-sig" if has_bom else "utf-8"
-    _write_text = lambda p, s: _write_text_no_newline_translate(p, s, encoding)
-
-    if path.name == "module" or path.name == "text":
-        # "module" files (form module) are usually plain BSL; if content looks like
-        # a tuple (e.g. object module), fall through to normal extraction.
+    if path.name in ("module", "text"):
         stripped = content.strip()
-
         if not (stripped.startswith("{") and "}" in stripped):
-            code = content
-
-            bsl_path = path.with_name(path.name + ".bsl")
-            _write_text(bsl_path, code)
-
-            _write_text(path, BSL_PLACEHOLDER)
-
-            logger.debug(f"Extracted BSL from '{path}' → '{bsl_path}' (plain module)")
-
-            return True
+            return _extract_plain_module(path, content, write)
 
     if _is_managed_form_file(path):
-        if content.startswith(MOXCEL_FORM_PREFIX):
-            return False
-
-        form_result = _find_form_module_by_tuple(content)
-
-        if form_result is not None:
-            code, replace_start, replace_end, _line_start, _line_end = form_result
-
-            bsl_path = path.with_name(path.name + ".bsl")
-            _write_text(bsl_path, code)
-
-            placeholder_in_file = f'"{BSL_PLACEHOLDER}"'
-
-            new_content = (
-                content[:replace_start] + placeholder_in_file + content[replace_end:]
-            )
-            _write_text(path, new_content)
-
-            logger.debug(f"Extracted BSL from '{path}' → '{bsl_path}'")
-
-            return True
+        return _extract_managed_form(path, content, write)
 
     return False
 
@@ -252,70 +261,48 @@ def merge_file(bsl_path: Path) -> bool:
     Returns True when the merge was performed, False otherwise.
     """
     base_path = bsl_path.with_name(bsl_path.stem)
-
     if not base_path.exists():
         logger.warning(f"Base file not found for '{bsl_path}' — skipping")
-
         return False
+
+    result = _read_file_content(base_path)
+    if result is None:
+        logger.warning(f"Cannot read/decode base file '{base_path}' — skipping")
+        return False
+    content, encoding = result
+    write = _writer_for_encoding(encoding)
 
     try:
-        base_raw = base_path.read_bytes()
-    except OSError:
-        logger.warning(f"Cannot read base file '{base_path}' — skipping")
-        return False
-    has_bom = base_raw.startswith(b"\xef\xbb\xbf")
-    try:
-        content = base_raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        logger.warning(f"Cannot decode base file '{base_path}' — skipping")
+        code = _read_text_preserve_newlines(bsl_path)
+    except (OSError, UnicodeDecodeError):
+        logger.warning(f"Cannot read BSL file '{bsl_path}' — skipping")
         return False
 
-    code = _read_text_preserve_newlines(bsl_path)
-
-    # Сохраняем BOM при записи и не подменяем \n.
-    encoding = "utf-8-sig" if has_bom else "utf-8"
-    _write_text = lambda p, s: _write_text_no_newline_translate(p, s, encoding)
-
-    # "module" and "text" files: whole file is the placeholder, replace entirely with .bsl content.
-    if (
-        base_path.name == "module" or base_path.name == "text"
-    ) and content.strip() == BSL_PLACEHOLDER:
-        _write_text(base_path, code)
-
+    if (base_path.name in ("module", "text")) and content.strip() == BSL_PLACEHOLDER:
+        write(base_path, code)
         logger.debug(f"Merged BSL from '{bsl_path}' → '{base_path}' (plain module)")
-
         return True
 
-    # Prefer explicit placeholder, then legacy empty string.
-    result = _find_placeholder_string(content)
-
-    if result is None:
-        result = _find_empty_string(content)
-
-    if result is None:
+    result_span = _find_placeholder_string(content)
+    if result_span is None:
+        result_span = _find_empty_string(content)
+    if result_span is None:
         logger.warning(
             f"No placeholder found in '{base_path}' — skipping (expected "
             f'"{BSL_PLACEHOLDER}" or empty string "")'
         )
-
         return False
 
-    start, end = result
-
-    # Re-escape quotes so the code is a valid 1C string literal.
+    start, end = result_span
     escaped_code = code.replace('"', '""')
 
-    # If we found the explicit placeholder, replace the full token (with quotes).
     if content[start:end].startswith('"'):
         new_content = content[:start] + '"' + escaped_code + '"' + content[end:]
     else:
-        # Legacy empty string: start/end are body bounds.
         new_content = content[:start] + escaped_code + content[end:]
 
-    _write_text(base_path, new_content)
-
+    write(base_path, new_content)
     logger.debug(f"Merged BSL from '{bsl_path}' → '{base_path}'")
-
     return True
 
 
@@ -325,20 +312,13 @@ def split_dir(dir_path: Path) -> int:
     Returns the number of files from which code was extracted.
     """
     count = 0
-
     for item in dir_path.rglob("*"):
-        if item.is_dir():
+        if item.is_dir() or item.suffix.lower() == ".bsl":
             continue
-
-        if item.suffix.lower() == ".bsl":
-            continue
-
         if split_file(item):
             count += 1
-
     if count:
         logger.info(f"Extracted BSL from {count} file(s) in '{dir_path}'")
-
     return count
 
 
@@ -349,13 +329,10 @@ def merge_dir(dir_path: Path) -> int:
     Returns the number of files merged.
     """
     count = 0
-
     for bsl_path in list(dir_path.rglob("*.bsl")):
         if merge_file(bsl_path):
             bsl_path.unlink()
             count += 1
-
     if count:
         logger.info(f"Merged BSL into {count} file(s) in '{dir_path}'")
-
     return count
