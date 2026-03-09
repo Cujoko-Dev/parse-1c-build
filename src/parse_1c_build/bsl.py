@@ -18,6 +18,7 @@ file is fed back to v8unpack.
 
 import re
 import shutil
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -263,6 +264,9 @@ def _extract_managed_form(
         return False
 
     code, replace_start, replace_end, _line_start, _line_end = form_result
+    # Skip if content is already placeholder (re-parse of already-split file)
+    if code.strip() == BSL_PLACEHOLDER:
+        return False
     dest = bsl_path if bsl_path is not None else path.with_name(path.name + ".bsl")
     write(dest, code)
 
@@ -285,6 +289,9 @@ def split_file(path: Path, bsl_dest_path: Path | None = None) -> bool:
     if result is None:
         return False
     content, encoding = result
+    # Skip already-split files (plain placeholder) to avoid writing placeholder into .bsl
+    if content.strip() == BSL_PLACEHOLDER:
+        return False
     write = _writer_for_encoding(encoding)
 
     if path.name in ("module", "text"):
@@ -366,6 +373,22 @@ def _unique_bsl_name(root: Path, base_name: str) -> str:
     return f"{base_name}_{n}.bsl"
 
 
+def _read_existing_bsl_renames(root: Path) -> dict[str, str]:
+    """Read meta/bsl_renames.txt or bsl_renames.txt; return companion -> bsl_name map."""
+    result: dict[str, str] = {}
+    for renames_path in (root / META_DIRNAME / BSL_RENAMES_FILENAME, root / BSL_RENAMES_FILENAME):
+        if not renames_path.exists():
+            continue
+        with renames_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if RENAMES_ARROW not in line:
+                    continue
+                bsl_name, companion = line.split(RENAMES_ARROW, 1)
+                result[companion.strip()] = bsl_name.strip()
+    return result
+
+
 def _write_bsl_renames_file(
     root: Path, renames_entries: list[tuple[str, str]]
 ) -> None:
@@ -380,6 +403,23 @@ def _write_bsl_renames_file(
             f.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
 
 
+def _move_to_bin_with_retry(p: Path, dest: Path, *, max_attempts: int = 5) -> None:
+    """Move file or dir to dest, retrying on PermissionError (Windows: antivirus/indexer may hold handles)."""
+    for attempt in range(max_attempts):
+        try:
+            if p.is_dir():
+                if dest.exists():
+                    shutil.rmtree(dest)
+                p.rename(dest)
+            else:
+                shutil.move(str(p), str(dest))
+            return
+        except PermissionError:
+            if attempt == max_attempts - 1:
+                raise
+            time.sleep(0.15 * (attempt + 1))
+
+
 def _apply_bin_layout(root: Path) -> None:
     """Move all non-BSL, non-meta content under bin/; write renames.txt; update bsl_renames with bin/ prefix."""
     bin_path = root / BIN_DIRNAME
@@ -390,12 +430,7 @@ def _apply_bin_layout(root: Path) -> None:
         if p.is_file() and p.suffix.lower() == ".bsl":
             continue
         dest = bin_path / p.name
-        if p.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            p.rename(dest)
-        else:
-            shutil.move(str(p), str(dest))
+        _move_to_bin_with_retry(p, dest)
     renames_txt_entries: list[tuple[str, str]] = []
     for p in bin_path.rglob("*"):
         if p.is_dir():
@@ -443,6 +478,8 @@ def split_dir(
     root = dir_path
     use_names = use_form_names
     renames_entries: list[tuple[str, str]] = []  # (bsl_filename, companion_rel)
+    # Reuse existing bsl names when re-parsing so we overwrite 0_Объект.bsl instead of creating 0_Объект_1.bsl
+    existing_companion_to_bsl = _read_existing_bsl_renames(root) if use_names else {}
 
     count = 0
     items = sorted(dir_path.rglob("*"), key=lambda p: (len(p.parts), str(p)))
@@ -451,6 +488,9 @@ def split_dir(
             continue
         if META_DIRNAME in item.parts:
             continue
+        # Skip files under bin/ when using bin layout: they are from a previous run (with placeholder)
+        if use_bin_layout and BIN_DIRNAME in item.parts:
+            continue
         bsl_dest_path: Path | None = None
         renames_entry: tuple[str, str] | None = None
         if use_names:
@@ -458,12 +498,18 @@ def split_dir(
                 rel = item.relative_to(root)
             except ValueError:
                 rel = item
+            companion = str(rel).replace("\\", "/")
+            companion_after_bin = f"{BIN_DIRNAME}/{companion}" if use_bin_layout else companion
+
+            def _choose_bsl_name(base_name: str) -> str:
+                existing = existing_companion_to_bsl.get(companion_after_bin) or existing_companion_to_bsl.get(companion)
+                return existing if existing else _unique_bsl_name(root, base_name)
+
             if _is_managed_form_file(item):
                 form_name = _get_form_or_object_name(root, item.name)
                 if form_name:
-                    companion = str(rel)
                     base_name = BSL_PREFIX_FORM + form_name
-                    bsl_name = _unique_bsl_name(root, base_name)
+                    bsl_name = _choose_bsl_name(base_name)
                     bsl_dest_path = root / bsl_name
                     renames_entry = (bsl_name, companion)
             elif item.name in ("module", "text") and rel.parts:
@@ -472,16 +518,14 @@ def split_dir(
                     obj_name = _get_form_or_object_name(root, parent_name)
                     if item.name == "module":
                         if obj_name:
-                            companion = str(rel)
                             base_name = BSL_PREFIX_FORM + obj_name
-                            bsl_name = _unique_bsl_name(root, base_name)
+                            bsl_name = _choose_bsl_name(base_name)
                             bsl_dest_path = root / bsl_name
                             renames_entry = (bsl_name, companion)
                     else:
                         # object module (text): 0_Имя или 0_Объект при отсутствии описания
-                        companion = str(rel)
                         base_name = BSL_PREFIX_OBJECT + (obj_name if obj_name else "Объект")
-                        bsl_name = _unique_bsl_name(root, base_name)
+                        bsl_name = _choose_bsl_name(base_name)
                         bsl_dest_path = root / bsl_name
                         renames_entry = (bsl_name, companion)
         if split_file(item, bsl_dest_path):
