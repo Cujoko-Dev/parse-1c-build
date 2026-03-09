@@ -156,6 +156,17 @@ class TestSplitFile:
         # Placeholder is the full quoted token for form (we replaced the whole string).
         assert _read(src) == ('{0,\n0,\n"' + BSL_PLACEHOLDER + '",\n0}\n')
 
+    def test_managed_form_file_with_moxcel_prefix_skips_extraction(self, tmp_path):
+        """Managed form (UUID.0) that starts with MOXCEL has no BSL module — do not extract."""
+        src = tmp_path / "3a3209bb-e006-49cf-89f4-92fd41c3adf5.0"
+        _write(src, "MOXCEL\t \n???{8,1,12,\n")
+
+        result = split_file(src)
+
+        assert result is False
+        assert not (tmp_path / "3a3209bb-e006-49cf-89f4-92fd41c3adf5.0.bsl").exists()
+        assert _read(src) == "MOXCEL\t \n???{8,1,12,\n"
+
     def test_module_file_is_plain_bsl_replaced_by_placeholder(self, tmp_path):
         """File named 'module' is already plain BSL: save to module.bsl, file becomes placeholder."""
         src = tmp_path / "module"

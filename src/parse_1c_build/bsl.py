@@ -50,6 +50,9 @@ _RE_MANAGED_FORM_FILE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.0$"
 )
 
+# Forms that start with this (e.g. spreadsheet/document) have no BSL module in the file.
+MOXCEL_FORM_PREFIX = "MOXCEL"
+
 
 def _is_managed_form_file(path: Path) -> bool:
     """True if *path* is a managed form (UUID.0)."""
@@ -213,6 +216,9 @@ def split_file(path: Path) -> bool:
             return True
 
     if _is_managed_form_file(path):
+        if content.startswith(MOXCEL_FORM_PREFIX):
+            return False
+
         form_result = _find_form_module_by_tuple(content)
 
         if form_result is not None:
