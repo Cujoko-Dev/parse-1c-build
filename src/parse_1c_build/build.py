@@ -88,19 +88,22 @@ class Builder(Processor):
 
                 args_au += [str(temp_source_dir_path)]
             else:
-                bsl_files = list(input_dir_path.rglob("*.bsl"))
-
-                if bsl_files:
+                if bsl.has_bin_layout(input_dir_path):
                     temp_dir_path = Path(tempfile.mkdtemp())
-                    temp_source_dir_path = temp_dir_path / input_dir_path.name
-
-                    shutil.copytree(input_dir_path, temp_source_dir_path)
-
-                    bsl.merge_dir(temp_source_dir_path)
-
+                    temp_source_dir_path = bsl.prepare_temp_for_build(
+                        input_dir_path, temp_dir_path
+                    )
                     args_au += [str(temp_source_dir_path)]
                 else:
-                    args_au += [str(input_dir_path)]
+                    bsl_files = list(input_dir_path.rglob("*.bsl"))
+                    if bsl_files:
+                        temp_dir_path = Path(tempfile.mkdtemp())
+                        temp_source_dir_path = temp_dir_path / input_dir_path.name
+                        shutil.copytree(input_dir_path, temp_source_dir_path)
+                        bsl.merge_dir(temp_source_dir_path)
+                        args_au += [str(temp_source_dir_path)]
+                    else:
+                        args_au += [str(input_dir_path)]
 
             args_au += [str(output_file_path)]
 

@@ -298,20 +298,29 @@ class TestRoundtrip:
 
 class TestSplitDir:
     def test_on_epf_src_extracts_expected_files(self, copied_epf_src):
-        """split_dir по структуре test_epf_src: 2 управляемые формы (faa87ad8, 47291cc9) + module + text = 4 извлечения."""
+        """split_dir по структуре test_epf_src: 4 извлечения; 1_ — модули форм, 0_ — модуль обработки; всё в корне."""
         count = split_dir(copied_epf_src)
 
         assert count == 4
-        # Управляемые формы (UUID.0) с BSL в кортеже
-        assert (copied_epf_src / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0.bsl").exists()
-        assert (copied_epf_src / "47291cc9-8ef9-4425-8d37-28bcf15b372d.0.bsl").exists()
-        # Каталоги с plain BSL: module, text
-        assert (copied_epf_src / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module.bsl").exists()
-        assert (copied_epf_src / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text.bsl").exists()
-        # info — пустой кортеж, не извлекается
-        assert not (copied_epf_src / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "info.bsl").exists()
-        # form — обычная форма, не извлекается
-        assert not (copied_epf_src / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "form.bsl").exists()
+        # Модули форм в корне с префиксом 1_
+        assert (copied_epf_src / "1_ФормаУправляемая.bsl").exists()
+        assert (copied_epf_src / "1_ДокументыСводкаВариантУправляемая.bsl").exists()
+        assert (copied_epf_src / "1_ФормаОбычная.bsl").exists()
+        # Модуль обработки в корне с префиксом 0_ (в образце нет файла b5b7a1e8 → 0_Объект.bsl)
+        assert (copied_epf_src / "0_Объект.bsl").exists()
+        # Модуль обработки не лежит в корне как голый text.bsl
+        assert not (copied_epf_src / "text.bsl").exists()
+        # Вспомогательные для сборки файлы в meta/ (не в корне и не в bin)
+        assert (copied_epf_src / "meta" / "bsl_renames.txt").exists()
+        assert (copied_epf_src / "meta" / "renames.txt").exists()
+        assert not (copied_epf_src / "bsl_renames.txt").exists()
+        assert not (copied_epf_src / "renames.txt").exists()
+        # Всё остальное в bin
+        assert (copied_epf_src / "bin" / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0").exists()
+        assert (copied_epf_src / "bin" / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module").exists()
+        assert (copied_epf_src / "bin" / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text").exists()
+        assert not (copied_epf_src / "bin" / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "info.bsl").exists()
+        assert not (copied_epf_src / "bin" / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "form.bsl").exists()
 
     def test_skips_existing_bsl_files(self, tmp_path, sample_plain_bsl):
         (tmp_path / "module.bsl").write_text(sample_plain_bsl, encoding="utf-8-sig")
@@ -348,32 +357,33 @@ class TestMergeDir:
         assert bsl_path.exists()
 
     def test_full_roundtrip_via_dir(self, copied_epf_src):
-        """split_dir по копии test_epf_src, затем merge_dir — исходники восстанавливаются."""
+        """split_dir по копии test_epf_src, затем merge_dir — исходники в bin восстанавливаются."""
         split_dir(copied_epf_src)
 
         build_dir = copied_epf_src.parent / "build"
         shutil.copytree(copied_epf_src, build_dir)
         merge_dir(build_dir)
 
+        bin_dir = build_dir / "bin"
         # Управляемая форма
         ref_managed = TEST_EPF_SRC / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0"
-        restored_managed = build_dir / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0"
+        restored_managed = bin_dir / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0"
         assert restored_managed.read_bytes() == ref_managed.read_bytes()
-        assert not (build_dir / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0.bsl").exists()
+        assert not (build_dir / "1_ФормаУправляемая.bsl").exists()
 
         # module, text
         ref_module = TEST_EPF_SRC / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module"
-        restored_module = build_dir / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module"
+        restored_module = bin_dir / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module"
         assert restored_module.read_text(encoding="utf-8-sig") == ref_module.read_text(encoding="utf-8-sig")
-        assert not (build_dir / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module.bsl").exists()
+        assert not (build_dir / "1_ФормаОбычная.bsl").exists()
 
         ref_text = TEST_EPF_SRC / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text"
-        restored_text = build_dir / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text"
+        restored_text = bin_dir / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text"
         assert restored_text.read_text(encoding="utf-8-sig") == ref_text.read_text(encoding="utf-8-sig")
-        assert not (build_dir / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text.bsl").exists()
+        assert not (build_dir / "0_Объект.bsl").exists()
 
         # Вторая управляемая форма
         ref_47291 = TEST_EPF_SRC / "47291cc9-8ef9-4425-8d37-28bcf15b372d.0"
-        restored_47291 = build_dir / "47291cc9-8ef9-4425-8d37-28bcf15b372d.0"
+        restored_47291 = bin_dir / "47291cc9-8ef9-4425-8d37-28bcf15b372d.0"
         assert restored_47291.read_bytes() == ref_47291.read_bytes()
-        assert not (build_dir / "47291cc9-8ef9-4425-8d37-28bcf15b372d.0.bsl").exists()
+        assert not (build_dir / "1_ДокументыСводкаВариантУправляемая.bsl").exists()
