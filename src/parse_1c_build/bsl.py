@@ -175,9 +175,7 @@ def _find_form_module_by_tuple(
 
     raw = value
     body = raw[1:-1].replace('""', '"')
-    if not body:
-        return None
-
+    # Allow empty body so that empty form modules are still extracted
     return (body, value_span[0], value_span[1], start_line, end_line)
 
 

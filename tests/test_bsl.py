@@ -215,6 +215,21 @@ class TestSplitFile:
         assert result is False
         assert not (tmp_path / "3a3209bb-e006-49cf-89f4-92fd41c3adf5.0.bsl").exists()
 
+    def test_managed_form_empty_module_extracted(self, tmp_path):
+        """Управляемая форма с пустым модулем — извлекается в пустой .bsl и placeholder в файле."""
+        # Минимальный кортеж управляемой формы: 3-й элемент корня — модуль (пустая строка "")
+        content = "{4,\n{1,0},\n{1,0},\n\"\",\n0}\n"
+        src = tmp_path / "b927dca7-1b18-485c-bd09-ca251dda9948.0"
+        _write(src, content)
+
+        result = split_file(src)
+
+        assert result is True
+        bsl_path = tmp_path / "b927dca7-1b18-485c-bd09-ca251dda9948.0.bsl"
+        assert bsl_path.exists()
+        assert bsl_path.read_text(encoding="utf-8-sig").strip() == ""
+        assert BSL_PLACEHOLDER in _read(src)
+
 
 # ---------------------------------------------------------------------------
 # merge_file
@@ -298,14 +313,18 @@ class TestRoundtrip:
 
 class TestSplitDir:
     def test_on_epf_src_extracts_expected_files(self, copied_epf_src):
-        """split_dir по структуре test_epf_src: 4 извлечения; 1_ — модули форм, 0_ — модуль обработки; всё в корне."""
+        """split_dir по структуре test_epf_src: 5 извлечений; 1_ — модули форм (в т.ч. пустые), 0_ — модуль обработки; всё в корне."""
         count = split_dir(copied_epf_src)
 
-        assert count == 4
+        assert count == 5
         # Модули форм в корне с префиксом 1_
         assert (copied_epf_src / "1_ФормаУправляемая.bsl").exists()
         assert (copied_epf_src / "1_ДокументыСводкаВариантУправляемая.bsl").exists()
         assert (copied_epf_src / "1_ФормаОбычная.bsl").exists()
+        # Пустой модуль управляемой формы тоже извлекается
+        empty_form_bsl = copied_epf_src / "1_НастройкаУправляемая.bsl"
+        assert empty_form_bsl.exists()
+        assert empty_form_bsl.read_text(encoding="utf-8-sig").strip() == ""
         # Модуль обработки в корне с префиксом 0_ (в образце нет файла b5b7a1e8 → 0_Объект.bsl)
         assert (copied_epf_src / "0_Объект.bsl").exists()
         # Модуль обработки не лежит в корне как голый text.bsl
@@ -317,6 +336,7 @@ class TestSplitDir:
         assert not (copied_epf_src / "renames.txt").exists()
         # Всё остальное в bin
         assert (copied_epf_src / "bin" / "faa87ad8-a8e9-4e88-8a2c-739a776cfad5.0").exists()
+        assert (copied_epf_src / "bin" / "b927dca7-1b18-485c-bd09-ca251dda9948.0").exists()
         assert (copied_epf_src / "bin" / "00884b3a-f65e-4956-8e79-e69cfac8c10e.0" / "module").exists()
         assert (copied_epf_src / "bin" / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "text").exists()
         assert not (copied_epf_src / "bin" / "b5b7a1e8-0705-4409-b78b-32500d067116.0" / "info.bsl").exists()
@@ -340,6 +360,10 @@ class TestMergeDir:
         bsl_path = tmp_path / "module.bsl"
         _write(base, BSL_PLACEHOLDER)
         _write(bsl_path, sample_plain_bsl)
+        (tmp_path / "meta").mkdir()
+        (tmp_path / "meta" / "bsl_renames.txt").write_text(
+            "module.bsl --> module", encoding="utf-8"
+        )
 
         count = merge_dir(tmp_path)
 
@@ -387,3 +411,9 @@ class TestMergeDir:
         restored_47291 = bin_dir / "47291cc9-8ef9-4425-8d37-28bcf15b372d.0"
         assert restored_47291.read_bytes() == ref_47291.read_bytes()
         assert not (build_dir / "1_ДокументыСводкаВариантУправляемая.bsl").exists()
+
+        # Управляемая форма с пустым модулем
+        ref_b927 = TEST_EPF_SRC / "b927dca7-1b18-485c-bd09-ca251dda9948.0"
+        restored_b927 = bin_dir / "b927dca7-1b18-485c-bd09-ca251dda9948.0"
+        assert restored_b927.read_bytes() == ref_b927.read_bytes()
+        assert not (build_dir / "1_НастройкаУправляемая.bsl").exists()
