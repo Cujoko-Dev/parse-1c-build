@@ -30,7 +30,7 @@ class Processor:
             "v8unpack_file_path",
             self.settings,
             "v8unpack_file",
-            Path("V8Unpack/V8Unpack.exe"),
+            Path("v8unpack/v8unpack.exe"),
             False,
         )
 
