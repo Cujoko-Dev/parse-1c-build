@@ -614,11 +614,12 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
     for bsl_file in input_dir_path.glob("*.bsl"):
         shutil.copy2(bsl_file, temp_source_dir_path / bsl_file.name)
 
+    temp_meta = temp_source_dir_path / META_DIRNAME
+    temp_meta.mkdir(parents=True, exist_ok=True)
+    temp_bsl_renames = temp_meta / BSL_RENAMES_FILENAME
     with bsl_renames_path.open(encoding="utf-8") as rf:
         lines = rf.readlines()
-    with (temp_source_dir_path / BSL_RENAMES_FILENAME).open(
-        "w", encoding="utf-8"
-    ) as tf:
+    with temp_bsl_renames.open("w", encoding="utf-8") as tf:
         for line in lines:
             line = line.strip()
             if not line or RENAMES_ARROW not in line:
@@ -630,5 +631,7 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
             tf.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
 
     merge_dir(temp_source_dir_path)
-    (temp_source_dir_path / BSL_RENAMES_FILENAME).unlink(missing_ok=True)
+    temp_bsl_renames.unlink(missing_ok=True)
+    if temp_meta.exists() and not any(temp_meta.iterdir()):
+        temp_meta.rmdir()
     return temp_source_dir_path
