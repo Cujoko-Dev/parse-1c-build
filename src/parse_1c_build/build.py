@@ -1,25 +1,19 @@
-import os
 import shutil
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 from loguru import logger
 
 from parse_1c_build import bsl
-from parse_1c_build.base import Processor, add_generic_arguments
+from parse_1c_build.base import (
+    EXTENSIONS_EPF_ERF,
+    EXTENSIONS_MD_ERT,
+    Processor,
+    add_generic_arguments,
+)
+from parse_1c_build.process_utils import check_silent
 
 logger.disable(__name__)
-
-EXTENSIONS_EPF_ERF = (".epf", ".erf")
-EXTENSIONS_MD_ERT = (".md", ".ert")
-
-
-def _check_silent(args: list[str]) -> None:
-    """Run subprocess with stdout suppressed; raise on non-zero exit."""
-    with open(os.devnull, "w", encoding="utf-8") as devnull:
-        subprocess.check_call(args, stdout=devnull)
 
 
 def _resolve_output_path(
@@ -47,26 +41,6 @@ def _backup_existing(path: Path) -> None:
     path.rename(bak)
 
 
-def _get_source_dir_for_epf_build(
-    self: Processor,
-    input_dir_path: Path,
-) -> Path:
-    """Return path to source directory for v8unpack -B (temp or input_dir_path)."""
-    if self.use_reader:
-        return Builder._build_temp_from_renames(input_dir_path)
-    if bsl.has_bin_layout(input_dir_path):
-        temp_parent = Path(tempfile.mkdtemp())
-        return bsl.prepare_temp_for_build(input_dir_path, temp_parent)
-    bsl_files = list(input_dir_path.rglob("*.bsl"))
-    if bsl_files:
-        temp_parent = Path(tempfile.mkdtemp())
-        temp_source = temp_parent / input_dir_path.name
-        shutil.copytree(input_dir_path, temp_source)
-        bsl.merge_dir(temp_source)
-        return temp_source
-    return input_dir_path
-
-
 class Builder(Processor):
     @staticmethod
     def _build_temp_from_renames(input_dir_path: Path) -> Path:
@@ -87,15 +61,31 @@ class Builder(Processor):
                     shutil.copy2(old_path, new_path)
         return temp_source_dir_path
 
+    def _get_source_dir_for_epf_build(self, input_dir_path: Path) -> Path:
+        """Return path to source directory for v8unpack -B (temp or input_dir_path)."""
+        if self.use_reader:
+            return self._build_temp_from_renames(input_dir_path)
+        if bsl.has_bin_layout(input_dir_path):
+            temp_parent = Path(tempfile.mkdtemp())
+            return bsl.prepare_temp_for_build(input_dir_path, temp_parent)
+        bsl_files = list(input_dir_path.rglob("*.bsl"))
+        if bsl_files:
+            temp_parent = Path(tempfile.mkdtemp())
+            temp_source = temp_parent / input_dir_path.name
+            shutil.copytree(input_dir_path, temp_source)
+            bsl.merge_dir(temp_source)
+            return temp_source
+        return input_dir_path
+
     def _run_epf_erf_build(
         self,
         input_dir_path: Path,
         output_file_path: Path,
     ) -> None:
         """Build EPF/ERF from source directory via v8unpack -B."""
-        source_dir = _get_source_dir_for_epf_build(self, input_dir_path)
+        source_dir = self._get_source_dir_for_epf_build(input_dir_path)
         args = [str(self.get_v8_unpack_file_path()), "-B", str(source_dir), str(output_file_path)]
-        _check_silent(args)
+        check_silent(args)
         logger.info(f"'{output_file_path}' built from '{input_dir_path}'")
 
     def _run_md_ert_build(
@@ -111,7 +101,7 @@ class Builder(Processor):
         elif suffix == ".md":
             args.append("--meta-data")
         args += ["-c", "-F", str(output_file_path), "-DD", str(input_dir_path)]
-        _check_silent(args)
+        check_silent(args)
         logger.info(f"'{output_file_path}' built from '{input_dir_path}'")
 
     def run(
@@ -134,20 +124,20 @@ class Builder(Processor):
             raise Exception("Undefined output file type")
 
 
+def _get_run_kwargs(args) -> dict:
+    """Build run() kwargs from parsed CLI args."""
+    return {
+        "input_dir_path": Path(args.input[0]),
+        "output_path": None if args.output is None else Path(args.output),
+        "do_not_backup": args.do_not_backup,
+    }
+
+
 def run(args) -> None:
     """Запустить"""
-    logger.enable("cjk_commons")
-    logger.enable("commons_1c")
-    logger.enable(__name__)
+    from parse_1c_build.cli_runner import run_subcommand
 
-    try:
-        processor = Builder(**vars(args))
-        input_dir_path = Path(args.input[0])
-        output_file_path = None if args.output is None else Path(args.output)
-        processor.run(input_dir_path, output_file_path, args.do_not_backup)
-    except Exception as exc:
-        logger.exception(exc)
-        sys.exit(1)
+    run_subcommand(Builder, args, _get_run_kwargs)
 
 
 def add_subparser(subparsers) -> None:

@@ -1,7 +1,4 @@
-import os
 import shutil
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -10,24 +7,15 @@ from commons_1c import platform_
 from loguru import logger
 
 from parse_1c_build import bsl
-from parse_1c_build.base import Processor, add_generic_arguments
+from parse_1c_build.base import (
+    EXTENSIONS_EPF_ERF,
+    EXTENSIONS_MD_ERT,
+    Processor,
+    add_generic_arguments,
+)
+from parse_1c_build.process_utils import check_silent, run_silent
 
 logger.disable(__name__)
-
-EXTENSIONS_EPF_ERF = (".epf", ".erf")
-EXTENSIONS_MD_ERT = (".md", ".ert")
-
-
-def _run_silent(args: list[str]) -> int:
-    """Run subprocess with stdout suppressed. Returns exit code."""
-    with open(os.devnull, "w", encoding="utf-8") as devnull:
-        return subprocess.call(args, stdout=devnull)
-
-
-def _check_silent(args: list[str]) -> None:
-    """Run subprocess with stdout suppressed; raise on non-zero exit."""
-    with open(os.devnull, "w", encoding="utf-8") as devnull:
-        subprocess.check_call(args, stdout=devnull)
 
 
 def _default_output_dir(input_file_path: Path) -> Path:
@@ -89,7 +77,7 @@ class Parser(Processor):
                 f"{command}\n"
             )
         try:
-            exit_code = _run_silent([bat_file.name])
+            exit_code = run_silent([bat_file.name])
             if exit_code:
                 raise Exception(
                     f"parsing '{input_file_path}' with V8Reader failed",
@@ -111,7 +99,7 @@ class Parser(Processor):
             str(input_file_path),
             str(output_dir_path),
         ]
-        _check_silent(args)
+        check_silent(args)
         if not raw:
             bsl.split_dir(output_dir_path)
 
@@ -136,7 +124,7 @@ class Parser(Processor):
                 "-DD",
                 str(output_dir_path),
             ]
-            _check_silent(args)
+            check_silent(args)
         finally:
             if temp_dir is not None and temp_dir.exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -161,20 +149,20 @@ class Parser(Processor):
             raise Exception("Undefined input file type")
 
 
+def _get_run_kwargs(args) -> dict:
+    """Build run() kwargs from parsed CLI args."""
+    return {
+        "input_file_path": Path(args.input[0]),
+        "output_dir_path": None if args.output is None else Path(args.output),
+        "raw": args.raw,
+    }
+
+
 def run(args) -> None:
     """Запустить"""
-    logger.enable("cjk_commons")
-    logger.enable("commons_1c")
-    logger.enable(__name__)
+    from parse_1c_build.cli_runner import run_subcommand
 
-    try:
-        processor = Parser(**vars(args))
-        input_file_path = Path(args.input[0])
-        output_dir_path = None if args.output is None else Path(args.output)
-        processor.run(input_file_path, output_dir_path, args.raw)
-    except Exception as exc:
-        logger.exception(exc)
-        sys.exit(1)
+    run_subcommand(Parser, args, _get_run_kwargs)
 
 
 def add_subparser(subparsers) -> None:

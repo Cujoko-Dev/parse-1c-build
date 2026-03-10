@@ -4,6 +4,10 @@ from cjk_commons.settings import get_attribute, get_path_attribute, get_settings
 
 from parse_1c_build.__about__ import APP_AUTHOR, APP_NAME
 
+# File extensions for EPF/ERF and MD/ERT (used by Parser and Builder).
+EXTENSIONS_EPF_ERF = (".epf", ".erf")
+EXTENSIONS_MD_ERT = (".md", ".ert")
+
 
 class Processor:
     """Процессор"""
