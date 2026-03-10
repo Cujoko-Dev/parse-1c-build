@@ -2,57 +2,29 @@
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File (Integrated Terminal)",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Python: Module",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "enter-your-module-name-here",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Python: Django",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/manage.py",
             "console": "integratedTerminal",
-            "args": [
-                "runserver",
-                "--noreload",
-                "--nothreading"
-            ],
-            "django": true
-        },
-        {
-            "name": "Python: Flask",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "flask",
-            "env": {
-                "FLASK_APP": "app.py"
-            },
-            "args": [
-                "run",
-                "--no-debugger",
-                "--no-reload"
-            ],
-            "jinja": true
-        },
-        {
-            "name": "Python: Current File (External Terminal)",
-            "type": "debugpy",
-            "request": "launch",
+            "name": "Python: Current File (Integrated Terminal)",
             "program": "${file}",
-            "console": "externalTerminal"
+            "request": "launch",
+            "type": "debugpy"
         },
+        {
+            "module": "enter-your-module-name-here",
+            "name": "Python: Module",
+            "request": "launch",
+            "type": "debugpy"
+        },
+        {
+            "console": "externalTerminal",
+            "name": "Python: Current File (External Terminal)",
+            "program": "${file}",
+            "request": "launch",
+            "type": "debugpy"
+        },
+        
+        // ─── Удалённая отладка (attach) ─────────────────────────────────────
         {
             // Запускать скрипт для отладки надо так: "python -m debugpy --connect 56789 -m <модуль>"
             // Или так: 
@@ -64,7 +36,7 @@
                 "host": "localhost",
                 "port": 56789
             },
-            "name": "Python Debugger: Remote Attach (listen localhost:56789)",
+            "name": "Python: Attach (процесс с --connect 56789)",
             "pathMappings": [
                 {
                     "localRoot": "${workspaceFolder}",
@@ -87,7 +59,7 @@
                 "host": "localhost",
                 "port": 56789
             },
-            "name": "Python Debugger: Remote Attach (connect localhost:56789)",
+            "name": "Python: Attach (процесс с --listen 56789)",
             "pathMappings": [
                 {
                     "localRoot": "${workspaceFolder}",
@@ -96,6 +68,21 @@
             ],
             "request": "attach",
             "type": "debugpy"
+        },
+        
+        // ─── Проект parse-1c-build ─────────────────────────────────────────
+        {
+            "args": [
+                "parse",
+                "--raw",
+                "${workspaceFolder}/tests/data/test.epf"
+            ],
+            // Путь к .epf/.erf — изменить при необходимости
+            "module": "parse_1c_build",
+            "name": "p1cb: parse (тест. данные)",
+            "request": "launch",
+            "type": "debugpy"
         }
-    ]
+    ],
+    "version": "0.2.0"
 }
