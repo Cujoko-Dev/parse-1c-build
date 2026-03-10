@@ -49,9 +49,7 @@ _RE_MANAGED_FORM_FILE = re.compile(
 )
 
 # Form description file (sibling of UUID.0): first string after {1,0,uuid} is form name
-_RE_FORM_DESC_NAME = re.compile(
-    r"\{1,0,[0-9a-fA-F-]{36}\},\s*\"([^\"]+)\""
-)
+_RE_FORM_DESC_NAME = re.compile(r"\{1,0,[0-9a-fA-F-]{36}\},\s*\"([^\"]+)\"")
 
 BSL_RENAMES_FILENAME = "bsl_renames.txt"
 BIN_DIRNAME = "bin"
@@ -64,16 +62,12 @@ BSL_PREFIX_OBJECT = "0_"
 BSL_PREFIX_FORM = "1_"
 
 
-def _write_text_no_newline_translate(
-    path: Path, text: str, encoding: str
-) -> None:
+def _write_text_no_newline_translate(path: Path, text: str, encoding: str) -> None:
     """Записать текст без подмены \\n на os.linesep (побайтовое совпадение с образцом)."""
     path.write_bytes(text.encode(encoding))
 
 
-def _read_text_preserve_newlines(
-    path: Path, encoding: str = "utf-8-sig"
-) -> str:
+def _read_text_preserve_newlines(path: Path, encoding: str = "utf-8-sig") -> str:
     """Прочитать текст без преобразования \\r/\\n (read_text даёт universal newlines)."""
     return path.read_bytes().decode(encoding)
 
@@ -271,9 +265,7 @@ def _extract_managed_form(
     write(dest, code)
 
     placeholder_in_file = f'"{BSL_PLACEHOLDER}"'
-    new_content = (
-        content[:replace_start] + placeholder_in_file + content[replace_end:]
-    )
+    new_content = content[:replace_start] + placeholder_in_file + content[replace_end:]
     write(path, new_content)
     logger.debug(f"Extracted BSL from '{path}' → '{dest}'")
     return True
@@ -376,7 +368,10 @@ def _unique_bsl_name(root: Path, base_name: str) -> str:
 def _read_existing_bsl_renames(root: Path) -> dict[str, str]:
     """Read meta/bsl_renames.txt or bsl_renames.txt; return companion -> bsl_name map."""
     result: dict[str, str] = {}
-    for renames_path in (root / META_DIRNAME / BSL_RENAMES_FILENAME, root / BSL_RENAMES_FILENAME):
+    for renames_path in (
+        root / META_DIRNAME / BSL_RENAMES_FILENAME,
+        root / BSL_RENAMES_FILENAME,
+    ):
         if not renames_path.exists():
             continue
         with renames_path.open("r", encoding="utf-8") as f:
@@ -389,9 +384,7 @@ def _read_existing_bsl_renames(root: Path) -> dict[str, str]:
     return result
 
 
-def _write_bsl_renames_file(
-    root: Path, renames_entries: list[tuple[str, str]]
-) -> None:
+def _write_bsl_renames_file(root: Path, renames_entries: list[tuple[str, str]]) -> None:
     """Write meta/bsl_renames.txt from (bsl_filename, companion_rel) list."""
     if not renames_entries:
         return
@@ -499,10 +492,14 @@ def split_dir(
             except ValueError:
                 rel = item
             companion = str(rel).replace("\\", "/")
-            companion_after_bin = f"{BIN_DIRNAME}/{companion}" if use_bin_layout else companion
+            companion_after_bin = (
+                f"{BIN_DIRNAME}/{companion}" if use_bin_layout else companion
+            )
 
             def _choose_bsl_name(base_name: str) -> str:
-                existing = existing_companion_to_bsl.get(companion_after_bin) or existing_companion_to_bsl.get(companion)
+                existing = existing_companion_to_bsl.get(
+                    companion_after_bin
+                ) or existing_companion_to_bsl.get(companion)
                 return existing if existing else _unique_bsl_name(root, base_name)
 
             if _is_managed_form_file(item):
@@ -524,7 +521,9 @@ def split_dir(
                             renames_entry = (bsl_name, companion)
                     else:
                         # object module (text): 0_Имя или 0_Объект при отсутствии описания
-                        base_name = BSL_PREFIX_OBJECT + (obj_name if obj_name else "Объект")
+                        base_name = BSL_PREFIX_OBJECT + (
+                            obj_name if obj_name else "Объект"
+                        )
                         bsl_name = _choose_bsl_name(base_name)
                         bsl_dest_path = root / bsl_name
                         renames_entry = (bsl_name, companion)
@@ -534,7 +533,11 @@ def split_dir(
                 renames_entries.append(renames_entry)
 
     _write_bsl_renames_file(root, renames_entries)
-    if use_bin_layout and count and (root / META_DIRNAME / BSL_RENAMES_FILENAME).exists():
+    if (
+        use_bin_layout
+        and count
+        and (root / META_DIRNAME / BSL_RENAMES_FILENAME).exists()
+    ):
         _apply_bin_layout(root)
 
     if count:
@@ -552,15 +555,11 @@ def merge_dir(dir_path: Path) -> int:
     Returns the number of files merged.
     """
     count = 0
-    renames_path = dir_path / BSL_RENAMES_FILENAME
-    if not renames_path.exists():
-        renames_path = dir_path / META_DIRNAME / BSL_RENAMES_FILENAME
+    renames_path = dir_path / META_DIRNAME / BSL_RENAMES_FILENAME
     if renames_path.exists():
         with renames_path.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if not line or RENAMES_ARROW not in line:
-                    continue
                 parts = line.split(RENAMES_ARROW, 1)
                 bsl_name, companion = parts[0].strip(), parts[1].strip()
                 bsl_path = dir_path / bsl_name
@@ -569,11 +568,6 @@ def merge_dir(dir_path: Path) -> int:
                     if merge_file(bsl_path, base_path):
                         bsl_path.unlink()
                         count += 1
-    # Merge any remaining .bsl (e.g. unnamed, next to companion)
-    for bsl_path in list(dir_path.rglob("*.bsl")):
-        if merge_file(bsl_path):
-            bsl_path.unlink()
-            count += 1
     if count:
         logger.info(f"Merged BSL into {count} file(s) in '{dir_path}'")
     return count
@@ -624,7 +618,9 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
 
     with bsl_renames_path.open(encoding="utf-8") as rf:
         lines = rf.readlines()
-    with (temp_source_dir_path / BSL_RENAMES_FILENAME).open("w", encoding="utf-8") as tf:
+    with (temp_source_dir_path / BSL_RENAMES_FILENAME).open(
+        "w", encoding="utf-8"
+    ) as tf:
         for line in lines:
             line = line.strip()
             if not line or RENAMES_ARROW not in line:
@@ -632,7 +628,7 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
             parts = line.split(RENAMES_ARROW, 1)
             bsl_name, companion = parts[0].strip(), parts[1].strip()
             if companion.startswith(prefix_bin):
-                companion = companion[len(prefix_bin):]
+                companion = companion[len(prefix_bin) :]
             tf.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
 
     merge_dir(temp_source_dir_path)
