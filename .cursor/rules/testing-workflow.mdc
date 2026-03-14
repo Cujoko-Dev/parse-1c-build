@@ -5,8 +5,5 @@ alwaysApply: true
 
 # Environment & Testing
 
-- **Virtual environment**: Always activate `.venv` before running Python or tests.
-- **Tests**: Run tests using `scripts/test.ps1` (do not call Python or pytest directly from `.venv/Scripts`).
-- **Test runner**: Use pytest as the test runner.
-- **After modifying code**: Always run `scripts/test.ps1` to verify changes. Run it as a matter of course, without asking the user for permission.
-- **Test files**: Never change test files unless the user explicitly asks to do so.
+- **venv**: Всегда активировать `.venv` перед запуском Python или тестов.
+- **Файлы тестов**: Не менять без явного указания пользователя.

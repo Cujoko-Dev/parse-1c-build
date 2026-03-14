@@ -5,6 +5,4 @@ alwaysApply: true
 
 # Temporary files and directories
 
-- **Do not create** temporary directories or files (e.g. `tmp_epf_src`, `tmp`, `test_output`) inside the project directory.
-- Use the system temp directory (e.g. `tempfile.mkdtemp()`), pytest's `tmp_path`/`tmpdir`, or a path explicitly provided by the user.
-- This avoids polluting the workspace and keeps the repo clean.
+- Не создавать временные каталоги/файлы (например `tmp_epf_src`, `tmp`, `test_output`) внутри проекта.
