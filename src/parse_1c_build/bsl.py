@@ -539,7 +539,7 @@ def split_dir(
         _apply_bin_layout(root)
 
     if count:
-        logger.info(f"Extracted BSL from {count} file(s) in '{dir_path}'")
+        logger.debug(f"Extracted BSL from {count} file(s) in '{dir_path}'")
     return count
 
 
@@ -567,7 +567,7 @@ def merge_dir(dir_path: Path) -> int:
                         bsl_path.unlink()
                         count += 1
     if count:
-        logger.info(f"Merged BSL into {count} file(s) in '{dir_path}'")
+        logger.debug(f"Merged BSL into {count} file(s) in '{dir_path}'")
     return count
 
 
