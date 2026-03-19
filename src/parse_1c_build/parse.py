@@ -5,6 +5,7 @@ from pathlib import Path
 from cjk_commons.settings import get_path_attribute
 from commons_1c import platform_
 from loguru import logger
+import questionary
 
 from parse_1c_build import bsl
 from parse_1c_build.base import (
@@ -17,11 +18,52 @@ from parse_1c_build.process_utils import check_silent, run_silent
 
 logger.disable(__name__)
 
+ERR_INPUT_REQUIRED = "Не указан входной путь. Укажите 'input' или '--interactive'"
+ERR_INTERACTIVE_NOT_FOUND = "Не найдено подходящих входных файлов для интерактивного выбора"
+ERR_INTERACTIVE_CANCELLED = "Интерактивный выбор отменен пользователем"
+
 
 def _default_output_dir(input_file_path: Path) -> Path:
     """Default output directory: parent / stem_ext_src (e.g. file_epf_src)."""
     ext = input_file_path.suffix[1:]
     return Path(input_file_path.parent, f"{input_file_path.stem}_{ext}_src")
+
+
+def _input_files_get() -> list[Path]:
+    """Возвращает список входных файлов для интерактивного выбора."""
+    extensions = {*EXTENSIONS_EPF_ERF, *EXTENSIONS_MD_ERT}
+    file_paths = [
+        file_path
+        for file_path in Path.cwd().rglob("*")
+        if file_path.is_file() and file_path.suffix.lower() in extensions
+    ]
+    return sorted(file_paths)
+
+
+def _input_file_select_interactive(file_paths: list[Path]) -> Path | None:
+    """Интерактивно выбирает входной файл для разбора."""
+    if not file_paths:
+        raise Exception(ERR_INTERACTIVE_NOT_FOUND)
+
+    try:
+        selected = questionary.select(
+            "Выберите файл для парсинга",
+            choices=[
+                questionary.Choice(
+                    title=str(path.relative_to(Path.cwd())),
+                    value=path,
+                )
+                for path in file_paths
+            ],
+            qmark="parse",
+        ).ask()
+    except KeyboardInterrupt as exc:
+        raise Exception(ERR_INTERACTIVE_CANCELLED) from exc
+
+    if selected is None:
+        raise Exception(ERR_INTERACTIVE_CANCELLED)
+
+    return selected
 
 
 class Parser(Processor):
@@ -151,8 +193,15 @@ class Parser(Processor):
 
 def _get_run_kwargs(args) -> dict:
     """Build run() kwargs from parsed CLI args."""
+    input_file_path = Path(args.input) if args.input else None
+    if args.interactive:
+        input_file_path = _input_file_select_interactive(_input_files_get())
+
+    if input_file_path is None:
+        raise Exception(ERR_INPUT_REQUIRED)
+
     return {
-        "input_file_path": Path(args.input[0]),
+        "input_file_path": input_file_path,
         "output_dir_path": None if args.output is None else Path(args.output),
         "raw": args.raw,
     }

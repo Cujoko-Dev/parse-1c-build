@@ -23,6 +23,7 @@ dependencies = [
     "cjk-commons>=3.6.3,<4.0.0",
     "commons-1c>=3.6.3,<4.0.0",
     "loguru>=0.6.0",
+    "questionary>=2.1.1",
 ]
 description = "Parse and build utilities for 1C:Enterprise"
 keywords = ["1c", "parse", "build", "v8reader", "v8unpack", "gcomp"]
@@ -30,7 +31,7 @@ license = {text = "MIT"}
 name = "parse-1c-build"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "6.0.1"
+version = "6.1.0"
 
 [project.scripts]
 p1cb = "parse_1c_build.__main__:run"

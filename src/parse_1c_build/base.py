@@ -51,20 +51,26 @@ class Processor:
 
 def add_generic_arguments(subparser) -> None:
     subparser.add_argument(
-        "-u",
-        "--use-reader",
-        action="store_true",
-        help="Parse or build with V8Reader",
-    )
-    subparser.add_argument(
         "-h",
         "--help",
         action="help",
         help="Show this help message and exit",
     )
+    subparser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Select interactively",
+    )
+    subparser.add_argument(
+        "-u",
+        "--use-reader",
+        action="store_true",
+        help="Parse or build with V8Reader",
+    )
 
     # todo Добавить help
-    subparser.add_argument("input", nargs=1)
+    subparser.add_argument("input", nargs="?")
 
     # todo Добавить help
     subparser.add_argument("output", nargs="?")

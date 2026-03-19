@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 from loguru import logger
+import questionary
 
 from parse_1c_build import bsl
 from parse_1c_build.base import (
@@ -14,6 +15,10 @@ from parse_1c_build.base import (
 from parse_1c_build.process_utils import check_silent
 
 logger.disable(__name__)
+
+ERR_INPUT_REQUIRED = "Не указан входной путь. Укажите 'input' или '--interactive'"
+ERR_INTERACTIVE_NOT_FOUND = "Не найдено подходящих входных каталогов для интерактивного выбора"
+ERR_INTERACTIVE_CANCELLED = "Интерактивный выбор отменен пользователем"
 
 
 def _resolve_output_path(
@@ -39,6 +44,46 @@ def _backup_existing(path: Path) -> None:
             break
         n += 1
     path.rename(bak)
+
+
+def _input_dirs_get() -> list[Path]:
+    """Возвращает список входных каталогов исходников для интерактивного выбора."""
+    allowed_ext = {ext[1:] for ext in (*EXTENSIONS_EPF_ERF, *EXTENSIONS_MD_ERT)}
+    input_dirs = []
+    for dir_path in Path.cwd().rglob("*_src"):
+        if not dir_path.is_dir():
+            continue
+        name_without_src, _, _ = dir_path.name.rpartition("_src")
+        _, _, ext = name_without_src.rpartition("_")
+        if ext.lower() in allowed_ext:
+            input_dirs.append(dir_path)
+    return sorted(input_dirs)
+
+
+def _input_dir_select_interactive(input_dirs: list[Path]) -> Path | None:
+    """Интерактивно выбирает входной каталог для сборки."""
+    if not input_dirs:
+        raise Exception(ERR_INTERACTIVE_NOT_FOUND)
+
+    try:
+        selected = questionary.select(
+            "Выберите каталог исходников для сборки",
+            choices=[
+                questionary.Choice(
+                    title=str(path.relative_to(Path.cwd())),
+                    value=path,
+                )
+                for path in input_dirs
+            ],
+            qmark="build",
+        ).ask()
+    except KeyboardInterrupt as exc:
+        raise Exception(ERR_INTERACTIVE_CANCELLED) from exc
+
+    if selected is None:
+        raise Exception(ERR_INTERACTIVE_CANCELLED)
+
+    return selected
 
 
 class Builder(Processor):
@@ -126,8 +171,15 @@ class Builder(Processor):
 
 def _get_run_kwargs(args) -> dict:
     """Build run() kwargs from parsed CLI args."""
+    input_dir_path = Path(args.input) if args.input else None
+    if args.interactive:
+        input_dir_path = _input_dir_select_interactive(_input_dirs_get())
+
+    if input_dir_path is None:
+        raise Exception(ERR_INPUT_REQUIRED)
+
     return {
-        "input_dir_path": Path(args.input[0]),
+        "input_dir_path": input_dir_path,
         "output_path": None if args.output is None else Path(args.output),
         "do_not_backup": args.do_not_backup,
     }
