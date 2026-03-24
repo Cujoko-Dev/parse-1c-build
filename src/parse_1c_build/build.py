@@ -60,14 +60,14 @@ def _input_dirs_get() -> list[Path]:
     return sorted(input_dirs)
 
 
-def _input_dir_select_interactive(input_dirs: list[Path]) -> Path | None:
-    """Интерактивно выбирает входной каталог для сборки."""
+def _input_dirs_select_interactive(input_dirs: list[Path]) -> list[Path]:
+    """Интерактивно выбирает входные каталоги для сборки."""
     if not input_dirs:
         raise Exception(ERR_INTERACTIVE_NOT_FOUND)
 
     try:
-        selected = questionary.select(
-            "Выберите каталог исходников для сборки",
+        selected = questionary.checkbox(
+            "Выберите каталоги исходников для сборки",
             choices=[
                 questionary.Choice(
                     title=str(path.relative_to(Path.cwd())),
@@ -75,6 +75,7 @@ def _input_dir_select_interactive(input_dirs: list[Path]) -> Path | None:
                 )
                 for path in input_dirs
             ],
+            validate=lambda value: "Выберите хотя бы один каталог" if not value else True,
             qmark="build",
         ).ask()
     except KeyboardInterrupt as exc:
@@ -169,27 +170,38 @@ class Builder(Processor):
             raise Exception("Undefined output file type")
 
 
-def _get_run_kwargs(args) -> dict:
-    """Build run() kwargs from parsed CLI args."""
-    input_dir_path = Path(args.input) if args.input else None
+def _input_dir_paths_get(args) -> list[Path]:
+    """Build input directory paths list from parsed CLI args."""
     if args.interactive:
-        input_dir_path = _input_dir_select_interactive(_input_dirs_get())
+        return _input_dirs_select_interactive(_input_dirs_get())
+
+    input_dir_path = Path(args.input) if args.input else None
 
     if input_dir_path is None:
         raise Exception(ERR_INPUT_REQUIRED)
 
-    return {
-        "input_dir_path": input_dir_path,
-        "output_path": None if args.output is None else Path(args.output),
-        "do_not_backup": args.do_not_backup,
-    }
+    return [input_dir_path]
 
 
 def run(args) -> None:
     """Запустить"""
-    from parse_1c_build.cli_runner import run_subcommand
+    from parse_1c_build import logger
 
-    run_subcommand(Builder, args, _get_run_kwargs)
+    logger.enable("cjk_commons")
+    logger.enable("commons_1c")
+    logger.enable(Builder.__module__)
+    try:
+        builder = Builder(**vars(args))
+        output_path = None if args.output is None else Path(args.output)
+        for input_dir_path in _input_dir_paths_get(args):
+            builder.run(
+                input_dir_path=input_dir_path,
+                output_path=output_path,
+                do_not_backup=args.do_not_backup,
+            )
+    except Exception as exc:
+        logger.exception(exc)
+        raise SystemExit(1)
 
 
 def add_subparser(subparsers) -> None:

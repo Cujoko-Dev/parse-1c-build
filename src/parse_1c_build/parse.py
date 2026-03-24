@@ -40,14 +40,14 @@ def _input_files_get() -> list[Path]:
     return sorted(file_paths)
 
 
-def _input_file_select_interactive(file_paths: list[Path]) -> Path | None:
-    """Интерактивно выбирает входной файл для разбора."""
+def _input_files_select_interactive(file_paths: list[Path]) -> list[Path]:
+    """Интерактивно выбирает входные файлы для разбора."""
     if not file_paths:
         raise Exception(ERR_INTERACTIVE_NOT_FOUND)
 
     try:
-        selected = questionary.select(
-            "Выберите файл для парсинга",
+        selected = questionary.checkbox(
+            "Выберите файлы для парсинга",
             choices=[
                 questionary.Choice(
                     title=str(path.relative_to(Path.cwd())),
@@ -55,6 +55,7 @@ def _input_file_select_interactive(file_paths: list[Path]) -> Path | None:
                 )
                 for path in file_paths
             ],
+            validate=lambda value: "Выберите хотя бы один файл" if not value else True,
             qmark="parse",
         ).ask()
     except KeyboardInterrupt as exc:
@@ -191,27 +192,38 @@ class Parser(Processor):
             raise Exception("Undefined input file type")
 
 
-def _get_run_kwargs(args) -> dict:
-    """Build run() kwargs from parsed CLI args."""
-    input_file_path = Path(args.input) if args.input else None
+def _input_file_paths_get(args) -> list[Path]:
+    """Build input file paths list from parsed CLI args."""
     if args.interactive:
-        input_file_path = _input_file_select_interactive(_input_files_get())
+        return _input_files_select_interactive(_input_files_get())
+
+    input_file_path = Path(args.input) if args.input else None
 
     if input_file_path is None:
         raise Exception(ERR_INPUT_REQUIRED)
 
-    return {
-        "input_file_path": input_file_path,
-        "output_dir_path": None if args.output is None else Path(args.output),
-        "raw": args.raw,
-    }
+    return [input_file_path]
 
 
 def run(args) -> None:
     """Запустить"""
-    from parse_1c_build.cli_runner import run_subcommand
+    from parse_1c_build import logger
 
-    run_subcommand(Parser, args, _get_run_kwargs)
+    logger.enable("cjk_commons")
+    logger.enable("commons_1c")
+    logger.enable(Parser.__module__)
+    try:
+        parser = Parser(**vars(args))
+        output_dir_path = None if args.output is None else Path(args.output)
+        for input_file_path in _input_file_paths_get(args):
+            parser.run(
+                input_file_path=input_file_path,
+                output_dir_path=output_dir_path,
+                raw=args.raw,
+            )
+    except Exception as exc:
+        logger.exception(exc)
+        raise SystemExit(1)
 
 
 def add_subparser(subparsers) -> None:
