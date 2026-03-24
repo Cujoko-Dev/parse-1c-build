@@ -67,6 +67,14 @@ def _input_files_select_interactive(file_paths: list[Path]) -> list[Path]:
     return selected
 
 
+def _prepare_output_dir(output_dir_path: Path) -> None:
+    """Удаляет старый каталог распаковки перед новым парсингом."""
+    if output_dir_path.exists():
+        if not output_dir_path.is_dir():
+            raise Exception(f"Output path exists and is not a directory: '{output_dir_path}'")
+        shutil.rmtree(output_dir_path, ignore_errors=False)
+
+
 class Parser(Processor):
     def get_1c_exe_file_path(self, **kwargs) -> Path:
         return get_path_attribute(
@@ -183,6 +191,7 @@ class Parser(Processor):
         suffix = input_file_path.suffix.lower()
         if output_dir_path is None:
             output_dir_path = _default_output_dir(input_file_path)
+        _prepare_output_dir(output_dir_path)
 
         if suffix in EXTENSIONS_EPF_ERF:
             self._run_epf_erf(input_file_path, output_dir_path, raw)
