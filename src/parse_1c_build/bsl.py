@@ -352,17 +352,6 @@ def merge_file(bsl_path: Path, base_path: Path | None = None) -> bool:
     return True
 
 
-def _unique_bsl_name(root: Path, base_name: str) -> str:
-    """Return base_name + '.bsl' or base_name_n.bsl if name already exists."""
-    name = f"{base_name}.bsl"
-    if not (root / name).exists():
-        return name
-    n = 1
-    while (root / f"{base_name}_{n}.bsl").exists():
-        n += 1
-    return f"{base_name}_{n}.bsl"
-
-
 def _read_existing_bsl_renames(root: Path) -> dict[str, str]:
     """Read meta/bsl_renames.txt or bsl_renames.txt; return companion -> bsl_name map."""
     result: dict[str, str] = {}
@@ -460,7 +449,9 @@ def split_dir(
     root: form modules (managed and ordinary) get prefix ``1_``, object module
     (text) gets prefix ``0_`` (e.g. ``0_Объект.bsl``, ``1_ФормаОбычная.bsl``).
     Names come from description file (UUID without .0); bsl_renames.txt
-    records the companion path for each .bsl file. If
+    records the companion path for each .bsl file. If several modules share the
+    same derived name, the later file in the walk overwrites the .bsl and
+    bsl_renames keeps the last companion. If
     *use_bin_layout* is True, all non-BSL files are moved under a ``bin``
     subdir and renames.txt is written for build.
 
@@ -468,8 +459,9 @@ def split_dir(
     """
     root = dir_path
     use_names = use_form_names
-    renames_entries: list[tuple[str, str]] = []  # (bsl_filename, companion_rel)
-    # Reuse existing bsl names when re-parsing so we overwrite 0_Объект.bsl instead of creating 0_Объект_1.bsl
+    # Один .bsl на имя: при коллизии последний модуль перезаписывает файл и остаётся в карте
+    renames_map: dict[str, str] = {}
+    # При повторном парсе имя .bsl берём из bsl_renames; иначе одно имя на base_name (коллизии перезаписывают)
     existing_companion_to_bsl = _read_existing_bsl_renames(root) if use_names else {}
 
     count = 0
@@ -498,7 +490,7 @@ def split_dir(
                 existing = existing_companion_to_bsl.get(
                     companion_after_bin
                 ) or existing_companion_to_bsl.get(companion)
-                return existing if existing else _unique_bsl_name(root, base_name)
+                return existing if existing else f"{base_name}.bsl"
 
             if _is_managed_form_file(item):
                 form_name = _get_form_or_object_name(root, item.name)
@@ -528,9 +520,10 @@ def split_dir(
         if split_file(item, bsl_dest_path):
             count += 1
             if renames_entry is not None:
-                renames_entries.append(renames_entry)
+                bsl_n, comp = renames_entry
+                renames_map[bsl_n] = comp
 
-    _write_bsl_renames_file(root, renames_entries)
+    _write_bsl_renames_file(root, sorted(renames_map.items()))
     if (
         use_bin_layout
         and count
