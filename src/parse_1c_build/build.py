@@ -16,7 +16,10 @@ from parse_1c_build.process_utils import check_silent
 
 logger.disable(__name__)
 
-ERR_INPUT_REQUIRED = "Не указан входной путь. Укажите 'input' или '--interactive'"
+ERR_CWD_INPUTS_NOT_FOUND = (
+    "Не найдено подходящих каталогов исходников (*_epf_src, *_erf_src, …) "
+    "в текущем каталоге (и подкаталогах). Укажите каталог или используйте -i"
+)
 ERR_INTERACTIVE_NOT_FOUND = "Не найдено подходящих входных каталогов для интерактивного выбора"
 ERR_INTERACTIVE_CANCELLED = "Интерактивный выбор отменен пользователем"
 
@@ -175,12 +178,14 @@ def _input_dir_paths_get(args) -> list[Path]:
     if args.interactive:
         return _input_dirs_select_interactive(_input_dirs_get())
 
-    input_dir_path = Path(args.input) if args.input else None
+    if args.input:
+        return [Path(args.input)]
 
-    if input_dir_path is None:
-        raise Exception(ERR_INPUT_REQUIRED)
+    discovered = _input_dirs_get()
+    if not discovered:
+        raise Exception(ERR_CWD_INPUTS_NOT_FOUND)
 
-    return [input_dir_path]
+    return discovered
 
 
 def run(args) -> None:
@@ -206,7 +211,10 @@ def run(args) -> None:
 
 def add_subparser(subparsers) -> None:
     """Добавить подпарсер"""
-    desc = "Build files in a directory to 1C:Enterprise file"
+    desc = (
+        "Build files in a directory to 1C:Enterprise file. "
+        "If input is omitted, all matching source directories under the current directory are built."
+    )
     subparser = subparsers.add_parser(
         Path(__file__).stem,
         add_help=False,
