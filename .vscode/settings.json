@@ -1,9 +1,10 @@
 {
-    "cursorpyright.analysis.typeCheckingMode": "basic",
-    "python.analysis.typeCheckingMode": "basic",
-    "python.testing.pytestArgs": [
-        "src"
-    ],
-    "python.testing.pytestEnabled": true,
-    "python.testing.unittestEnabled": false,
+  "cursorpyright.analysis.typeCheckingMode": "basic",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.testing.pytestArgs": [
+      "src"
+  ],
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
 }
