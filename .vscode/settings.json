@@ -2,7 +2,7 @@
   "cursorpyright.analysis.typeCheckingMode": "basic",
   "python.analysis.typeCheckingMode": "basic",
   "python.testing.pytestArgs": [
-      "src"
+    "tests"
   ],
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
