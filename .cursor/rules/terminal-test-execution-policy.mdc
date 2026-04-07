@@ -1,0 +1,63 @@
+Terminal and test execution policy for this repository:
+
+- For any test, build, UI automation, 1C launch, or long-running command, use only:
+  .\scripts\test.ps1
+
+- Never run these commands directly for test/build/debug workflows:
+  pytest
+  python -m pytest
+  pdm run pytest
+  1cv8
+  1cv8c
+  powershell with inline automation logic
+  cmd /c for test orchestration
+  any infinite retry loop in terminal
+
+- Allowed direct terminal commands are limited to safe read-only inspection commands such as:
+  git status
+  git diff
+  git log --oneline -n 20
+  rg
+  Get-Content
+  ls
+  dir
+
+- Before changing scripts/test.ps1, explain why the change is needed.
+
+- scripts/test.ps1 is a deterministic command runner with strict scope:
+  - runs a command in an isolated PowerShell process
+  - captures stdout/stderr into log files
+  - enforces a timeout
+  - on timeout, terminates ONLY the child process tree (taskkill /T)
+
+- scripts/test.ps1 MUST NOT perform any global process cleanup:
+  - do NOT kill processes by name (python, node, 1cv8, etc.)
+  - do NOT scan the system for "similar" processes (e.g. pytest)
+  - do NOT use command-line pattern matching to kill processes
+  - do NOT attempt heuristic cleanup outside the process tree
+
+- Only processes started by the wrapper are allowed to be managed.
+
+- If some process survives after timeout, treat it as a bug in process spawning,
+  NOT as a reason to introduce broader cleanup logic.
+
+- When tests are needed, invoke the wrapper script and pass the target test command through its parameters.
+
+- After each wrapper run:
+  1) inspect exit code,
+  2) inspect the produced log,
+  3) only then decide next steps.
+
+- Do not start a new test run if the previous wrapper run reported timeout, cleanup failure, or a still-running child process.
+
+- Do not spawn background processes unless explicitly requested.
+
+- Do not create endless “run until green” terminal loops. Instead:
+  1) run wrapper once,
+  2) inspect failure,
+  3) change code,
+  4) run wrapper again.
+
+- Any 1C-related run must also go through the wrapper script so that process lifecycle is controlled ONLY via the wrapper.
+
+- If a direct command would violate this policy, stop and use .\scripts\test.ps1 instead.
