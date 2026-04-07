@@ -1,7 +1,7 @@
 Terminal and test execution policy for this repository:
 
 - For any test, build, UI automation, 1C launch, or long-running command, use only:
-  .\scripts\test.ps1
+  .\scripts\run.ps1
 
 - Never run these commands directly for test/build/debug workflows:
   pytest
@@ -23,15 +23,15 @@ Terminal and test execution policy for this repository:
   ls
   dir
 
-- Before changing scripts/test.ps1, explain why the change is needed.
+- Before changing scripts/run.ps1, explain why the change is needed.
 
-- scripts/test.ps1 is a deterministic command runner with strict scope:
+- scripts/run.ps1 is a deterministic command runner with strict scope:
   - runs a command in an isolated PowerShell process
   - captures stdout/stderr into log files
   - enforces a timeout
   - on timeout, terminates ONLY the child process tree (taskkill /T)
 
-- scripts/test.ps1 MUST NOT perform any global process cleanup:
+- scripts/run.ps1 MUST NOT perform any global process cleanup:
   - do NOT kill processes by name (python, node, 1cv8, etc.)
   - do NOT scan the system for "similar" processes (e.g. pytest)
   - do NOT use command-line pattern matching to kill processes
@@ -61,4 +61,4 @@ Terminal and test execution policy for this repository:
 
 - Any 1C-related run must also go through the wrapper script so that process lifecycle is controlled ONLY via the wrapper.
 
-- If a direct command would violate this policy, stop and use .\scripts\test.ps1 instead.
+- If a direct command would violate this policy, stop and use .\scripts\run.ps1 instead.
