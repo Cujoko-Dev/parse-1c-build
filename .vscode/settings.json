@@ -2,7 +2,7 @@
   "cursorpyright.analysis.typeCheckingMode": "basic",
   "python.analysis.extraPaths": ["${workspaceFolder}/src"],
   "python.analysis.typeCheckingMode": "basic",
-  "python.testing.pytestArgs": ["tests"],
+  "python.testing.pytestArgs": ["-c", ".dev/pyproject.toml"],
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false
 }
