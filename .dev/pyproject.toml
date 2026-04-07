@@ -1,0 +1,53 @@
+[build-system]
+build-backend = "pdm.backend"
+requires = ["pdm-backend"]
+
+[dependency-groups]
+dev = [
+    "debugpy>=1.8.2",
+    "pytest>=9.0.2",
+]
+
+[project]
+authors = [
+    {name = "Cujoko", email = "cujoko@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Russian",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "loguru>=0.6.0",
+    "questionary>=2.1.1",
+]
+description = "Parse and build utilities for 1C:Enterprise"
+keywords = ["1c", "parse", "build", "v8reader", "v8unpack", "gcomp"]
+license = {text = "MIT"}
+name = "parse-1c-build"
+requires-python = ">=3.10"
+version = "0.1.0"
+
+[project.scripts]
+p1cb = "parse_1c_build.__main__:run"
+
+[project.urls]
+repository = "https://github.com/Cujoko-Dev/parse-1c-build"
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e file:///C:/Dev/Python/commons/.dev#egg=cjk-commons",
+    "-e file:///C:/Dev/Python/commons-1c/.dev#egg=commons-1c",
+]
+
+[tool.pdm.scripts]
+test = "pytest"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
