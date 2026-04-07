@@ -6,7 +6,7 @@ Terminal and test execution policy for this repository:
 - Never run these commands directly for test/build/debug workflows:
   pytest
   python -m pytest
-  pdm run pytest
+  pdm run -p .dev pytest
   1cv8
   1cv8c
   powershell with inline automation logic
