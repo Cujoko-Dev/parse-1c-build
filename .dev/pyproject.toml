@@ -43,8 +43,8 @@ package-dir = "../src"
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "-e file:///C:/Dev/Python/commons/.dev#egg=cjk-commons",
-    "-e file:///C:/Dev/Python/commons-1c/.dev#egg=commons-1c",
+    "-e file:///C:/Dev/Python/commons#egg=cjk-commons",
+    "-e file:///C:/Dev/Python/commons-1c#egg=commons-1c",
 ]
 
 [tool.pdm.scripts]
