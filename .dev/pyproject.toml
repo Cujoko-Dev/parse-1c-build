@@ -38,6 +38,9 @@ p1cb = "parse_1c_build.__main__:run"
 [project.urls]
 repository = "https://github.com/Cujoko-Dev/parse-1c-build"
 
+[tool.pdm.build]
+package-dir = "../src"
+
 [tool.pdm.dev-dependencies]
 dev = [
     "-e file:///C:/Dev/Python/commons/.dev#egg=cjk-commons",
@@ -49,5 +52,5 @@ test = "pytest"
 
 [tool.pytest.ini_options]
 addopts = "-q"
-pythonpath = ["src"]
-testpaths = ["tests"]
+pythonpath = ["../src"]
+testpaths = ["../tests"]
