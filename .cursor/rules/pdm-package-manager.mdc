@@ -1,0 +1,14 @@
+---
+description: Use PDM for Python dependencies and commands (not uv/pip/poetry for project deps)
+alwaysApply: true
+---
+
+# Python package manager: PDM
+
+This project uses **PDM** for dependency management and virtual environments.
+
+- Install or sync dependencies with `pdm install` (or `pdm sync` as appropriate).
+- Add or remove packages with `pdm add` / `pdm remove`.
+- Run tools and scripts with `pdm run -p .dev …` when they are configured in `pyproject.toml`.
+
+Do **not** use `uv`, `pip install` (for project lockfiles), or Poetry for this repository unless the user explicitly asks for an exception.

@@ -1,0 +1,10 @@
+---
+description: Always provide a commit message after code changes
+alwaysApply: true
+---
+
+# Auto commit message
+
+After every change to project files, always include a ready-to-use commit message suggestion in the final response, even if the user did not ask for it explicitly.
+
+Keep it concise and aligned with repository commit style.

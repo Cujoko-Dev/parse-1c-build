@@ -6,3 +6,5 @@ alwaysApply: true
 # Temporary files and directories
 
 - Не создавать временные каталоги/файлы (например `tmp_epf_src`, `tmp`, `test_output`) внутри проекта.
+- Для временных файлов использовать системный temp (`tempfile.mkdtemp()`, `tempfile.TemporaryDirectory()`).
+- Результаты преобразований (разбора, конвертации) писать только во временный каталог вне проекта, никогда в `tests/data/`.
