@@ -1,10 +1,10 @@
 ---
-description: Always provide a commit message after code changes
+description: Commit message format requirements
 alwaysApply: true
 ---
 
-# Auto commit message
+# Commit message format
 
-After every change to project files, always include a ready-to-use commit message suggestion in the final response, even if the user did not ask for it explicitly.
+When commit message suggestion is needed, provide exactly one ready-to-use message.
 
-Keep it concise and aligned with repository commit style.
+The message must be concise, imperative, and aligned with repository style.

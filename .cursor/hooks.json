@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "type": "prompt",
+        "prompt": "Analyze whether this completed task produced real repository changes (tracked or untracked files). If yes, return followup_message in Russian asking the same agent to propose one concise commit message. If no changes were made, do not return followup_message."
+      }
+    ]
+  }
+}
