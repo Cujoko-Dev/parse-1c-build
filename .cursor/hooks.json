@@ -1,11 +1,14 @@
 {
-  "version": 1,
-  "hooks": {
-    "stop": [
-      {
-        "type": "prompt",
-        "prompt": "Analyze whether this completed task produced real repository changes (tracked or untracked files). If yes, return followup_message in Russian asking the same agent to propose one concise commit message. If no changes were made, do not return followup_message."
-      }
-    ]
-  }
+    "version":  1,
+    "stop_commit_message_prompt":  "Есть изменения в рабочем пространстве. Определи все репозитории, в которых есть изменения, и предложи для каждого такого репозитория отдельное короткое и понятное сообщение для коммита на русском языке. Верни ответ списком в формате: \u003cпуть_к_репозиторию\u003e: \u003cсообщение\u003e.",
+    "hooks":  {
+                  "stop":  [
+                               {
+                                   "type":  "command",
+                                   "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/stop-commit-message.ps1",
+                                   "timeout":  10,
+                                   "loop_limit":  1
+                               }
+                           ]
+              }
 }
