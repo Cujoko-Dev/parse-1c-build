@@ -2,10 +2,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import questionary
 from cjk_commons.settings import get_path_attribute
 from commons_1c import platform_
 from loguru import logger
-import questionary
 
 from parse_1c_build import bsl
 from parse_1c_build.base import (
@@ -22,7 +22,9 @@ ERR_CWD_INPUTS_NOT_FOUND = (
     "Не найдено подходящих входных файлов (.epf, .erf, .md, .ert) в текущем каталоге "
     "(и подкаталогах). Укажите файл или используйте -i"
 )
-ERR_INTERACTIVE_NOT_FOUND = "Не найдено подходящих входных файлов для интерактивного выбора"
+ERR_INTERACTIVE_NOT_FOUND = (
+    "Не найдено подходящих входных файлов для интерактивного выбора"
+)
 ERR_INTERACTIVE_CANCELLED = "Интерактивный выбор отменен пользователем"
 
 
@@ -74,7 +76,9 @@ def _prepare_output_dir(output_dir_path: Path) -> None:
     """Удаляет старый каталог распаковки перед новым парсингом."""
     if output_dir_path.exists():
         if not output_dir_path.is_dir():
-            raise Exception(f"Output path exists and is not a directory: '{output_dir_path}'")
+            raise Exception(
+                f"Output path exists and is not a directory: '{output_dir_path}'"
+            )
         shutil.rmtree(output_dir_path, ignore_errors=False)
 
 
@@ -83,7 +87,7 @@ class Parser(Processor):
         return get_path_attribute(
             kwargs,
             "1c_file_path",
-            default_path=platform_.get_last_1c_exe_file_fullpath(),
+            default_path=platform_.get_last_exe_file_fullpath("1cv8.exe"),
             is_dir=False,
         )
 
