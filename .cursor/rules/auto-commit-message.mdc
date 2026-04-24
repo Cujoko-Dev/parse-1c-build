@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Commit message format
 
-When commit message suggestion is needed, provide exactly one ready-to-use message.
+When the agent stops and has changed files, it must proactively suggest commit messages.
 
-The message must be concise, imperative, and aligned with repository style.
+For each affected project/repository with file changes, provide exactly one ready-to-use message.
+
+If no files were changed, do not suggest a commit message.
+
+Each message must be concise, imperative, and aligned with repository style.
