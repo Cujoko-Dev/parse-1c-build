@@ -2,12 +2,6 @@
 build-backend = "pdm.backend"
 requires = ["pdm-backend"]
 
-[dependency-groups]
-dev = [
-    "debugpy>=1.8.2",
-    "pytest>=9.0.2",
-]
-
 [project]
 authors = [
     {name = "Cujoko", email = "cujoko@gmail.com"},
@@ -40,11 +34,3 @@ p1cb = "parse_1c_build.__main__:run"
 
 [project.urls]
 repository = "https://github.com/Cujoko-Dev/parse-1c-build"
-
-[tool.pdm.scripts]
-test = "pytest"
-
-[tool.pytest.ini_options]
-addopts = "-q"
-pythonpath = ["src"]
-testpaths = ["tests"]
