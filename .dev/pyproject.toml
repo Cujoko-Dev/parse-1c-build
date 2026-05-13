@@ -48,9 +48,4 @@ dev = [
 ]
 
 [tool.pdm.scripts]
-test = "pytest"
-
-[tool.pytest.ini_options]
-addopts = "-q"
-pythonpath = ["../src"]
-testpaths = ["../tests"]
+test = { cmd = "pytest", working_dir = ".." }
