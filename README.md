@@ -30,6 +30,25 @@
 pipx install parse-1c-build
 ```
 
+## Установка в pipx для локальной разработки
+
+Для рабочего editable-окружения запускай:
+
+```powershell
+.\scripts\install-pipx-editable.ps1
+```
+
+Скрипт выполняет установку приложения из `.dev` и инжектит локальные зависимости в тот же pipx venv:
+
+```powershell
+pipx install --editable --force .\.dev
+pipx runpip parse-1c-build install --no-deps --no-cache-dir --force-reinstall `
+  -e C:\Dev\Python\commons `
+  -e C:\Dev\Python\commons-1c
+```
+
+Локальные зависимости ставятся из корней проектов, а не из их `.dev`: editable-режим тогда смотрит на `src`, а metadata берётся из основного `pyproject.toml`. Флаг `--no-deps` важен, чтобы одна локальная зависимость не переустановила другую обратно в обычном режиме.
+
 [1]: https://github.com/xDrivenDevelopment/v8Reader
 [2]: https://github.com/e8tools/v8unpack
 [3]: http://1c.alterplast.ru/gcomp/
