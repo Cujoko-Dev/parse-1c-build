@@ -20,7 +20,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 from loguru import logger
 
@@ -60,6 +60,53 @@ RENAMES_ARROW = " --> "
 # Префиксы имён BSL в корне: 0_ — модуль объекта (обработки), 1_ — модуль формы
 BSL_PREFIX_OBJECT = "0_"
 BSL_PREFIX_FORM = "1_"
+
+_MANAGED_FORM_NAME_SUFFIXES: frozenset[str] = frozenset({"управляемая", "managed"})
+_ORDINARY_FORM_NAME_SUFFIXES: frozenset[str] = frozenset({"обычная", "ordinary"})
+
+
+def _form_kind_from_internal_name(form_internal_name: str) -> str | None:
+    """Подсказка вида формы по суффиксу имени метаданных."""
+    nm = form_internal_name.casefold()
+    for suffix in _MANAGED_FORM_NAME_SUFFIXES:
+        if nm.endswith(suffix):
+            return "managed"
+    for suffix in _ORDINARY_FORM_NAME_SUFFIXES:
+        if nm.endswith(suffix):
+            return "ordinary"
+    return None
+
+
+def list_form_module_internal_names(
+    export_root: Path,
+    *,
+    form_kind: Literal["all", "managed", "ordinary"] = "all",
+    skip_empty: bool = True,
+) -> tuple[str, ...]:
+    """Внутренние имена форм по ``1_*.bsl`` в корне экспорта v8unpack bin-layout."""
+    if not export_root.is_dir():
+        raise NotADirectoryError(f"export root is not a directory: {export_root}")
+
+    prefix_len = len(BSL_PREFIX_FORM)
+    names: list[str] = []
+    for path in sorted(export_root.glob(f"{BSL_PREFIX_FORM}*.bsl")):
+        if not path.is_file():
+            continue
+        stem = path.stem
+        if not stem.startswith(BSL_PREFIX_FORM):
+            continue
+        name = stem[prefix_len:]
+        if not name:
+            continue
+        kind = _form_kind_from_internal_name(name)
+        if form_kind == "managed" and kind != "managed":
+            continue
+        if form_kind == "ordinary" and kind != "ordinary":
+            continue
+        if skip_empty and path.read_text(encoding="utf-8-sig").strip() == "":
+            continue
+        names.append(name)
+    return tuple(names)
 
 
 def _write_text_no_newline_translate(path: Path, text: str, encoding: str) -> None:

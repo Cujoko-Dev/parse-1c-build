@@ -14,6 +14,7 @@ import pytest
 from parse_1c_build.bsl import (
     BSL_PLACEHOLDER,
     _find_empty_string,
+    list_form_module_internal_names,
     merge_dir,
     merge_file,
     split_dir,
@@ -417,3 +418,42 @@ class TestMergeDir:
         restored_b927 = bin_dir / "b927dca7-1b18-485c-bd09-ca251dda9948.0"
         assert restored_b927.read_bytes() == ref_b927.read_bytes()
         assert not (build_dir / "1_НастройкаУправляемая.bsl").exists()
+
+
+class TestListFormModuleInternalNames:
+    def test_all_nonempty_on_split_epf_src(self, copied_epf_src):
+        split_dir(copied_epf_src)
+        names = list_form_module_internal_names(copied_epf_src)
+        assert names == (
+            "ДокументыСводкаВариантУправляемая",
+            "ФормаОбычная",
+            "ФормаУправляемая",
+        )
+        assert "НастройкаУправляемая" not in names
+
+    def test_managed_only(self, copied_epf_src):
+        split_dir(copied_epf_src)
+        names = list_form_module_internal_names(
+            copied_epf_src,
+            form_kind="managed",
+        )
+        assert names == (
+            "ДокументыСводкаВариантУправляемая",
+            "ФормаУправляемая",
+        )
+
+    def test_ordinary_only(self, copied_epf_src):
+        split_dir(copied_epf_src)
+        names = list_form_module_internal_names(
+            copied_epf_src,
+            form_kind="ordinary",
+        )
+        assert names == ("ФормаОбычная",)
+
+    def test_include_empty(self, copied_epf_src):
+        split_dir(copied_epf_src)
+        names = list_form_module_internal_names(
+            copied_epf_src,
+            skip_empty=False,
+        )
+        assert "НастройкаУправляемая" in names
