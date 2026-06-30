@@ -28,3 +28,17 @@ For tests, builds, 1C launches, or long-running commands, use `.\scripts\run.ps1
 Do not run `pytest`, `python -m pytest`, `pdm run pytest`, or 1C commands directly for those workflows.
 
 Safe read-only inspection commands such as `git status`, `git diff`, `rg`, `Get-Content`, `ls`, and `dir` are fine directly.
+
+## External project notes
+
+This project may have a `.notes` directory that points to external working notes.
+
+Rules for using `.notes`:
+
+- `.notes` is not automatically authoritative.
+- Prefer `.notes/00-current/ai-brief.md`, `.notes/00-current/current-state.md`, `.notes/00-current/open-questions.md`, and `.notes/00-current/decisions.md`.
+- Treat notes outside `.notes/00-current/` as non-authoritative unless they have explicit metadata such as `status: active` or `status: reference`.
+- Treat `.notes/90-archive/`, `.notes/30-someday/`, old plans, drafts and raw imported notes as historical context only.
+- Source code, tests, configs, migrations, build scripts and repository files override external notes.
+- If an external note conflicts with repository files, do not silently follow the note. Mention the conflict and prefer the repository.
+- Do not perform large changes based only on old notes. First verify against current code and current project instructions.

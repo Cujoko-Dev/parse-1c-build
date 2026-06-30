@@ -17,7 +17,10 @@ alwaysApply: true
 
 ## `.notes/`
 
-- Локальные заметки разработчика по проекту: контекст, решения, черновики.
-- Junction указывает на каталог вне репозитория (типично `D:\Notes\Work\_Dev\...\<имя-проекта>`).
-- Перед нетривиальными изменениями, рефакторингом или архитектурной работой — при наличии `.notes/` просмотреть релевантные заметки.
-- Каталог может отсутствовать на других машинах; не требовать его в CI или у других разработчиков.
+- Local external working notes for the project: context, decisions, drafts, plans and raw imported notes.
+- Junction typically points outside the repository, for example `D:\Notes\Work\_Dev\...\<project-name>`.
+- For external notes policy, see `AGENTS.md` section "External project notes".
+- Prefer curated current context in `.notes/00-current/`.
+- Treat notes outside `.notes/00-current/` as non-authoritative unless they have explicit metadata such as `status: active` or `status: reference`.
+- Source code, tests, configs, build scripts and repository files override external notes.
+- If `.notes/` is absent, do not require it in CI or on other machines.
