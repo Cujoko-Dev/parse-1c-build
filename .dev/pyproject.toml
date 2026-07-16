@@ -26,11 +26,11 @@ dependencies = [
     "questionary>=2.1.1",
 ]
 description = "Parse and build utilities for 1C:Enterprise"
+dynamic = ["version"]
 keywords = ["1c", "parse", "build", "v8reader", "v8unpack", "gcomp"]
 license = {text = "MIT"}
 name = "parse-1c-build"
 requires-python = ">=3.10"
-version = "0.1.0"
 
 [project.scripts]
 p1cb = "parse_1c_build.__main__:run"
@@ -49,3 +49,8 @@ dev = [
 
 [tool.pdm.scripts]
 test = { cmd = "pytest", working_dir = ".." }
+
+[tool.pdm.version]
+path = "../src/parse_1c_build/_version.py"
+pattern = '^__version__\s*=\s*"([^"]+)"'
+source = "file"
