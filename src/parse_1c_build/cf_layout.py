@@ -233,7 +233,7 @@ def _extract_root_prefixed_object(
     root: Path,
     renames: list[tuple[str, str]],
 ) -> None:
-    """Place dump files into root bin/ and extract BSL with root_prefix."""
+    """Place dump files into root _bin/ and extract BSL with root_prefix."""
     assert obj.root_prefix is not None
     bin_dir = root / bsl.BIN_DIRNAME
     for stem in sorted(obj.related_stems):
@@ -263,7 +263,7 @@ def _extract_root_prefixed_object(
 
 
 def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
-    """Extract modules inside an object mini-layout (bin already filled)."""
+    """Extract modules inside an object mini-layout (_bin already filled)."""
     bin_dir = object_dir / bsl.BIN_DIRNAME
     meta_dir = object_dir / bsl.META_DIRNAME
     meta_dir.mkdir(parents=True, exist_ok=True)

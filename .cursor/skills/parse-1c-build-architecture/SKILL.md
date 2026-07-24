@@ -2,7 +2,7 @@
 name: parse-1c-build-architecture
 description: >-
   Architecture of parse-1c-build: EPF/ERF/CF/CFE unpack/pack pipeline (v8unpack, V8Reader, gcomp),
-  BSL extraction layout (prefixes 0_/1_/2_/9_, Class/Object for CF), meta/bin structure,
+  BSL extraction layout (prefixes 0_/1_/2_/9_, Class/Object for CF), _meta/_bin structure,
   and round-trip rebuild. Use when modifying Parser/Builder, extending BSL split/merge,
   debugging roundtrip mismatches, or working with the p1cb CLI.
 ---
@@ -16,7 +16,7 @@ description: >-
 - `.cf`/`.cfe` — через **v8unpack** + раскладка `Класс/Объект/`
 - `.md`/`.ert` — через **GComp**
 
-Проект **не** парсит BSL в AST. Он оркестрирует внешние инструменты и добавляет слой **извлечения BSL** из артефактов v8unpack чтобы модули были редактируемы как `.bsl`-файлы со стабильной структурой `bin/ + meta/`.
+Проект **не** парсит BSL в AST. Он оркестрирует внешние инструменты и добавляет слой **извлечения BSL** из артефактов v8unpack чтобы модули были редактируемы как `.bsl`-файлы со стабильной структурой `_bin/ + _meta/`.
 
 ## Точки входа
 
@@ -31,7 +31,7 @@ description: >-
 | `base.py` | `Processor`: настройки, пути к `v8unpack`/`gcomp`, deprecated `use_reader` |
 | `parse.py` | `Parser`: распаковка EPF/ERF/CF/CFE/MD/ERT |
 | `build.py` | `Builder`: сборка через v8unpack/GComp |
-| `bsl.py` | split/merge BSL, префиксы `0_`/`1_`/`2_`/`9_`, `meta/` + `bin/` |
+| `bsl.py` | split/merge BSL, префиксы `0_`/`1_`/`2_`/`9_`, `_meta/` + `_bin/` |
 | `cf_layout.py` | CF/CFE: нарезка dump → `Класс/Объект/`, корень конфигурации |
 | `metadata_types.py` | UUID типов метаданных → имена классов |
 | `process_utils.py` | `run_silent` / `check_silent` |
@@ -62,8 +62,8 @@ Parser.run(input.cf)
   → output dir = parent / "{stem}_cf_src"
   → v8unpack -P
   → (если не --raw) cf_layout.organize_configuration_dir
-       → Справочники/Имя/{0_*.bsl,1_*.bsl,2_*.bsl,bin,meta}
-       → корень: 0_/1_/2_/9_*.bsl + bin/meta
+       → Справочники/Имя/{0_*.bsl,1_*.bsl,2_*.bsl,_bin,_meta}
+       → корень: 0_/1_/2_/9_*.bsl + _bin/_meta
 ```
 
 ## Типы форм и как извлекается BSL (`bsl.py`)
@@ -95,29 +95,29 @@ UUID.0/module  ← модуль обычной формы — plain BSL
 UUID.0/text    ← объектный модуль — plain BSL
 ```
 
-## Структура `meta/` + `bin/` после split_dir
+## Структура `_meta/` + `_bin/` после split_dir
 
 ```
 output_dir/
   0_ОбъектName.bsl          ← объектный модуль (из text)
   1_ФормаName.bsl           ← модуль формы (из UUID.0 или module)
-  meta/
+  _meta/
     bsl_renames.txt         ← .bsl → companion path map
-    renames.txt             ← target → bin/... для v8unpack rebuild
-  bin/
+    renames.txt             ← target → _bin/... для v8unpack rebuild
+  _bin/
     ...все остальные файлы...
 ```
 
-`_apply_bin_layout` перемещает всё (кроме `meta/`, `bin/`, корневых `*.bsl`) в `bin/` и перезаписывает оба `meta/*.txt`.
+`_apply_bin_layout` перемещает всё (кроме `_meta/`, `_bin/`, корневых `*.bsl`) в `_bin/` и перезаписывает оба `_meta/*.txt`.
 
 ## Round-trip: сборка обратно
 
 ```
 Builder.run(output_dir/)
   → prepare_temp_for_build:
-      copy bin/ → flat tree (per meta/renames.txt)
+      copy _bin/ → flat tree (per _meta/renames.txt)
       copy root *.bsl
-      rewrite meta/bsl_renames.txt (убрать bin/ prefix)
+      rewrite _meta/bsl_renames.txt (убрать _bin/ prefix)
       merge_dir (BSL → placeholder замены обратно)
       delete temp bsl_renames
   → v8unpack -B temp_dir result.epf
@@ -128,9 +128,9 @@ Builder.run(output_dir/)
 
 ```
 tests/
-  test_parse.py    # CLI parse → bin/root существует
+  test_parse.py    # CLI parse → _bin/root существует
   test_build.py    # Roundtrip: parse → build → parse --raw, побайтовое сравнение
-  test_bsl.py      # split_file / merge_file edge cases, split_dir/merge_dir, meta/ invariants
+  test_bsl.py      # split_file / merge_file edge cases, split_dir/merge_dir, _meta/ invariants
   test_base.py     # Processor / settings failures
   fixtures/                   # committed sample fixtures
     test.epf
