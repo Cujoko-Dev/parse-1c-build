@@ -38,3 +38,7 @@ cover/
 *.log
 Thumbs.db
 .DS_Store
+
+# Local test fixtures (machine-specific; not committed)
+tests/local-fixtures/*
+!tests/local-fixtures/.gitkeep

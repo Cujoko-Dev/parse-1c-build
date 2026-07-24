@@ -82,13 +82,13 @@ def test():
 def test_build_roundtrip_raw_sources_identical(test, tmpdir):
     """
     Разобрать test.epf (без --raw), собрать test_build.epf, разобрать test_build.epf с --raw
-    и сравнить raw-исходники с образцовыми tests/data/test_epf_src побайтово.
+    и сравнить raw-исходники с образцовыми tests/fixtures/test_epf_src побайтово.
     При расхождениях проверяем, где ошибка: split_dir (parse) или merge_dir (build).
     """
     parser = test
     tests_dir = Path(__file__).parent
-    sample_epf = tests_dir / "data" / "test.epf"
-    reference_raw = tests_dir / "data" / "test_epf_src"
+    sample_epf = tests_dir / "fixtures" / "test.epf"
+    reference_raw = tests_dir / "fixtures" / "test_epf_src"
     if not sample_epf.is_file():
         pytest.skip(f"Образцовый файл отсутствует: {sample_epf}")
     if not reference_raw.is_dir():
@@ -157,7 +157,7 @@ def test_build_1(test, tmpdir):
 
     temp_file_path = Path(tmpdir.join("test.epf"))
     args = parser.parse_args(
-        f"build tests/data/test_epf_src {temp_file_path}".split()
+        f"build tests/fixtures/test_epf_src {temp_file_path}".split()
     )
     build_run(args)
 
@@ -171,7 +171,7 @@ def test_build_2(test, tmpdir):
 
         temp_file_path = Path(tmpdir.join("test"))
         args = parser.parse_args(
-            f"build tests/data/test_epf_src {temp_file_path}".split(),
+            f"build tests/fixtures/test_epf_src {temp_file_path}".split(),
         )
         build_run(args)
 

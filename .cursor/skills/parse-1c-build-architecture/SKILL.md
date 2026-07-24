@@ -132,9 +132,10 @@ tests/
   test_build.py    # Roundtrip: parse → build → parse --raw, побайтовое сравнение
   test_bsl.py      # split_file / merge_file edge cases, split_dir/merge_dir, meta/ invariants
   test_base.py     # Processor / settings failures
-  data/
-    test.epf                  # фикстура для parse/build
-    test_epf_src/             # эталонное дерево для byte-for-byte сравнения
+  fixtures/                   # committed sample fixtures
+    test.epf
+    test_epf_src/
+  local-fixtures/             # gitignored local samples (e.g. CF/CFE)
 ```
 
 ## Практические заметки

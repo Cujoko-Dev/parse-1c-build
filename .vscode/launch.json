@@ -75,7 +75,7 @@
             "args": [
                 "parse",
                 "--raw",
-                "${workspaceFolder}/tests/data/test.epf"
+                "${workspaceFolder}/tests/fixtures/test.epf"
             ],
             // Путь к .epf/.erf — изменить при необходимости
             "module": "parse_1c_build",
