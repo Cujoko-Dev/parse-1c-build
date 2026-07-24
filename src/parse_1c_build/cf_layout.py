@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,6 +30,9 @@ _RE_COLLECTION = re.compile(
 _RE_OBJECT_NAME = re.compile(
     r'\{0,0,([0-9a-fA-F-]{36})\},"([^"]+)"'
 )
+_RE_CONFIG_IDENTITY = re.compile(
+    r'\{0,0,([0-9a-fA-F-]{36})\},"([^"]+)"'
+)
 
 CF_OBJECTS_FILENAME = "cf_objects.txt"
 ROOT_MARKER_FILES = frozenset({"root", "version", "versions"})
@@ -51,8 +54,75 @@ class MetaObject:
         return f"{self.class_folder}/{self.name}"
 
 
+@dataclass
+class DumpIndex:
+    """Top-level dump_dir index: stem -> entry names (O(1) lookup, no glob)."""
+
+    dump_dir: Path
+    by_stem: dict[str, list[str]]
+    names: set[str]
+
+    @classmethod
+    def build(cls, dump_dir: Path) -> DumpIndex:
+        by_stem: dict[str, list[str]] = {}
+        names: set[str] = set()
+        with os.scandir(dump_dir) as it:
+            for entry in it:
+                names.add(entry.name)
+                stem = entry.name.split(".", 1)[0].lower()
+                by_stem.setdefault(stem, []).append(entry.name)
+        for stem_names in by_stem.values():
+            stem_names.sort()
+        return cls(dump_dir=dump_dir, by_stem=by_stem, names=names)
+
+    def stem_exists(self, stem: str) -> bool:
+        return bool(self.by_stem.get(stem.lower()))
+
+    def iter_stem_paths(self, stem: str) -> list[Path]:
+        result: list[Path] = []
+        for name in self.by_stem.get(stem.lower(), ()):
+            path = self.dump_dir / name
+            if path.exists():
+                result.append(path)
+        return result
+
+    def forget(self, name: str) -> None:
+        self.names.discard(name)
+        stem = name.split(".", 1)[0].lower()
+        entries = self.by_stem.get(stem)
+        if not entries:
+            return
+        remaining = [n for n in entries if n != name]
+        if remaining:
+            self.by_stem[stem] = remaining
+        else:
+            del self.by_stem[stem]
+
+    def take_stem_paths(self, stem: str) -> list[Path]:
+        paths = self.iter_stem_paths(stem)
+        for path in paths:
+            self.forget(path.name)
+        return paths
+
+    def remaining_paths(self) -> list[Path]:
+        paths: list[Path] = []
+        for name in sorted(self.names):
+            path = self.dump_dir / name
+            if path.exists():
+                paths.append(path)
+        return paths
+
+
 def _read_text(path: Path) -> str:
     return path.read_bytes().decode("utf-8-sig")
+
+
+def _name_from_text(text: str, object_uuid: str) -> str:
+    for m in _RE_OBJECT_NAME.finditer(text):
+        if m.group(1).lower() == object_uuid.lower():
+            return m.group(2)
+    m = _RE_OBJECT_NAME.search(text)
+    return m.group(2) if m else object_uuid
 
 
 def _config_uuid_from_root(dump_dir: Path) -> str:
@@ -63,18 +133,6 @@ def _config_uuid_from_root(dump_dir: Path) -> str:
     if not m:
         raise Exception(f"Cannot find configuration UUID in '{root_path}'")
     return m.group(0).lower()
-
-
-def _object_name(dump_dir: Path, object_uuid: str) -> str:
-    path = dump_dir / object_uuid
-    if not path.is_file():
-        return object_uuid
-    text = _read_text(path)
-    for m in _RE_OBJECT_NAME.finditer(text):
-        if m.group(1).lower() == object_uuid.lower():
-            return m.group(2)
-    m = _RE_OBJECT_NAME.search(text)
-    return m.group(2) if m else object_uuid
 
 
 def _parse_collections(config_text: str) -> list[tuple[str, list[str]]]:
@@ -91,7 +149,9 @@ def _parse_collections(config_text: str) -> list[tuple[str, list[str]]]:
     return result
 
 
-def _discover_objects(dump_dir: Path) -> tuple[str, str, list[MetaObject]]:
+def _discover_objects(
+    dump_dir: Path, index: DumpIndex
+) -> tuple[str, str, list[MetaObject]]:
     config_uuid = _config_uuid_from_root(dump_dir)
     config_path = dump_dir / config_uuid
     if not config_path.is_file():
@@ -99,13 +159,21 @@ def _discover_objects(dump_dir: Path) -> tuple[str, str, list[MetaObject]]:
     config_text = _read_text(config_path)
     objects: list[MetaObject] = []
     top_level: set[str] = {config_uuid}
+    desc_texts: dict[str, str] = {}
+
     for type_uuid, uuids in _parse_collections(config_text):
         class_folder, root_prefix = METADATA_TYPES.get(
             type_uuid, (f"Тип_{type_uuid[:8]}", None)
         )
         for object_uuid in uuids:
             top_level.add(object_uuid)
-            name = _object_name(dump_dir, object_uuid)
+            desc = dump_dir / object_uuid
+            if desc.is_file():
+                text = _read_text(desc)
+                desc_texts[object_uuid] = text
+                name = _name_from_text(text, object_uuid)
+            else:
+                name = object_uuid
             objects.append(
                 MetaObject(
                     type_uuid=type_uuid,
@@ -115,34 +183,19 @@ def _discover_objects(dump_dir: Path) -> tuple[str, str, list[MetaObject]]:
                     root_prefix=root_prefix,
                 )
             )
-    # related stems: object uuid itself + referenced UUIDs that are not other top-level objects
+
     for obj in objects:
         obj.related_stems.add(obj.object_uuid)
-        desc = dump_dir / obj.object_uuid
-        if not desc.is_file():
+        text = desc_texts.get(obj.object_uuid)
+        if not text:
             continue
-        for ref in _RE_UUID.findall(_read_text(desc)):
+        for ref in _RE_UUID.findall(text):
             ref_l = ref.lower()
             if ref_l in top_level and ref_l != obj.object_uuid:
                 continue
-            if _stem_exists(dump_dir, ref_l):
+            if index.stem_exists(ref_l):
                 obj.related_stems.add(ref_l)
     return config_uuid, config_text, objects
-
-
-def _stem_exists(dump_dir: Path, stem: str) -> bool:
-    if (dump_dir / stem).exists():
-        return True
-    return any(dump_dir.glob(f"{stem}.*"))
-
-
-def _iter_stem_paths(dump_dir: Path, stem: str) -> list[Path]:
-    paths: list[Path] = []
-    direct = dump_dir / stem
-    if direct.exists():
-        paths.append(direct)
-    paths.extend(sorted(dump_dir.glob(f"{stem}.*")))
-    return paths
 
 
 def _safe_move(src: Path, dest: Path) -> None:
@@ -152,31 +205,29 @@ def _safe_move(src: Path, dest: Path) -> None:
             shutil.rmtree(dest)
         else:
             dest.unlink()
-    shutil.move(str(src), str(dest))
+    os.replace(src, dest)
 
 
 def _extract_plain_module(module_path: Path, dest_bsl: Path) -> bool:
     """Extract plain-text module file to .bsl and replace with placeholder."""
     if not module_path.is_file():
         return False
-    content = module_path.read_bytes().decode("utf-8-sig")
-    if content.strip() == "":
-        dest_bsl.write_bytes(b"")
-        module_path.write_bytes("\r\n".encode("utf-8"))
-        return True
-    # keep original newlines
     raw = module_path.read_bytes()
     if raw.startswith(b"\xef\xbb\xbf"):
         body = raw[3:]
-        dest_bsl.write_bytes(body)
     else:
-        dest_bsl.write_bytes(raw)
+        body = raw
+    if body.decode("utf-8-sig").strip() == "":
+        dest_bsl.write_bytes(b"")
+        module_path.write_bytes("\r\n".encode("utf-8"))
+        return True
+    dest_bsl.write_bytes(body)
     module_path.write_bytes(b"\xef\xbb\xbf" + bsl.BSL_PLACEHOLDER.encode("utf-8"))
     return True
 
 
 def _extract_root_prefixed_object(
-    dump_dir: Path,
+    index: DumpIndex,
     obj: MetaObject,
     root: Path,
     renames: list[tuple[str, str]],
@@ -185,13 +236,12 @@ def _extract_root_prefixed_object(
     assert obj.root_prefix is not None
     bin_dir = root / bsl.BIN_DIRNAME
     for stem in sorted(obj.related_stems):
-        for src in _iter_stem_paths(dump_dir, stem):
+        for src in index.take_stem_paths(stem):
             rel = src.name
             dest = bin_dir / rel
             _safe_move(src, dest)
             renames.append((rel, f"{bsl.BIN_DIRNAME}/{rel}"))
 
-    # module body: prefer object_uuid.0/text, else object_uuid.0 file (form)
     text_path = bin_dir / f"{obj.object_uuid}.0" / "text"
     form_path = bin_dir / f"{obj.object_uuid}.0"
     bsl_name = f"{obj.root_prefix}{obj.name}.bsl"
@@ -205,7 +255,6 @@ def _extract_root_prefixed_object(
                 )
             )
     elif form_path.is_file() and not form_path.is_dir():
-        # managed form / form module embedded in UUID.0
         if bsl.split_file(form_path, bsl_path):
             renames.append(
                 (bsl_name, f"{bsl.BIN_DIRNAME}/{obj.object_uuid}.0")
@@ -234,17 +283,14 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{rel}"))
             handled_texts.add(text_path)
 
-    # Object module: uuid.0/text
     _add_plain(bin_dir / f"{object_uuid}.0" / "text", f"{bsl.BSL_PREFIX_OBJECT}Объект.bsl")
 
-    # Manager module: uuid.2/text without command handler
     mgr_text = bin_dir / f"{object_uuid}.2" / "text"
     if mgr_text.is_file():
         body = mgr_text.read_bytes().decode("utf-8-sig")
         if body.strip() and "ОбработкаКоманды" not in body:
             _add_plain(mgr_text, f"{bsl.BSL_PREFIX_OBJECT}Менеджер.bsl")
 
-    # Command modules: any *.2/text with ОбработкаКоманды (including object's .2)
     for text_path in sorted(bin_dir.rglob("text")):
         if text_path in handled_texts or not text_path.is_file():
             continue
@@ -268,7 +314,6 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             bsl_name = f"{bsl.BSL_PREFIX_COMMAND}{cmd_name}_{stem[:8]}.bsl"
         _add_plain(text_path, bsl_name)
 
-    # Forms (managed UUID.0 files and ordinary form modules)
     for item in sorted(bin_dir.rglob("*"), key=lambda p: (len(p.parts), str(p))):
         if item.is_dir() or item.suffix.lower() == ".bsl":
             continue
@@ -298,33 +343,31 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
 
 
 def _extract_config_modules(
-    dump_dir: Path,
+    index: DumpIndex,
     config_text: str,
     root: Path,
     renames: list[tuple[str, str]],
 ) -> None:
     """Extract configuration application/session modules into root 0_*.bsl."""
-    # Identity uuid often appears as {0,0,uuid},"ConfigName"
-    m = re.search(
-        r'\{0,0,([0-9a-fA-F-]{36})\},"([^"]+)"',
-        config_text,
-    )
+    m = _RE_CONFIG_IDENTITY.search(config_text)
     if not m:
         return
     identity = m.group(1).lower()
     bin_dir = root / bsl.BIN_DIRNAME
     for slot, role in CONFIG_MODULE_SLOTS.items():
-        src_dir = dump_dir / f"{identity}.{slot}"
+        stem = f"{identity}.{slot}"
+        # slot dirs are named identity.N — stem split is identity, so take exact name
+        src_dir = index.dump_dir / stem
+        if not src_dir.exists():
+            continue
         text_path = src_dir / "text"
         if not text_path.is_file():
             continue
-        # move whole slot dir into bin
-        dest_dir = bin_dir / f"{identity}.{slot}"
+        dest_dir = bin_dir / stem
         if src_dir.exists() and not dest_dir.exists():
             _safe_move(src_dir, dest_dir)
-            renames.append(
-                (f"{identity}.{slot}", f"{bsl.BIN_DIRNAME}/{identity}.{slot}")
-            )
+            index.forget(stem)
+            renames.append((stem, f"{bsl.BIN_DIRNAME}/{stem}"))
         text_path = dest_dir / "text"
         if not text_path.is_file():
             continue
@@ -340,85 +383,68 @@ def _extract_config_modules(
 def organize_configuration_dir(dump_dir: Path) -> None:
     """Transform flat v8unpack CF dump into Class/Object + root BSL layout."""
     dump_dir = dump_dir.resolve()
-    config_uuid, config_text, objects = _discover_objects(dump_dir)
+    index = DumpIndex.build(dump_dir)
+    _config_uuid, config_text, objects = _discover_objects(dump_dir, index)
     logger.info(f"CF layout: {len(objects)} metadata object(s) in '{dump_dir}'")
 
-    # Work in a staging directory then replace contents
-    staging = Path(tempfile.mkdtemp(prefix="cf_layout_"))
-    try:
-        root_bin = staging / bsl.BIN_DIRNAME
-        root_meta = staging / bsl.META_DIRNAME
-        root_bin.mkdir(parents=True)
-        root_meta.mkdir(parents=True)
-        root_renames: list[tuple[str, str]] = []
-        objects_index: list[tuple[str, str]] = []  # rel_dir --> object_uuid
+    # In-place: keep moves on the same volume (rename), no staging copy.
+    root_bin = dump_dir / bsl.BIN_DIRNAME
+    root_meta = dump_dir / bsl.META_DIRNAME
+    root_bin.mkdir(parents=True, exist_ok=True)
+    root_meta.mkdir(parents=True, exist_ok=True)
+    index.forget(bsl.BIN_DIRNAME)
+    index.forget(bsl.META_DIRNAME)
 
-        claimed: set[str] = set()
+    root_renames: list[tuple[str, str]] = []
+    objects_index: list[tuple[str, str]] = []
+    created_class_dirs: set[str] = set()
 
-        # Root-prefixed objects (common modules/forms/commands)
-        for obj in objects:
-            if obj.root_prefix is None:
+    for obj in objects:
+        if obj.root_prefix is None:
+            continue
+        _extract_root_prefixed_object(index, obj, dump_dir, root_renames)
+        objects_index.append((f"@{obj.root_prefix}{obj.name}", obj.object_uuid))
+
+    _extract_config_modules(index, config_text, dump_dir, root_renames)
+
+    for obj in objects:
+        if obj.root_prefix is not None:
+            continue
+        created_class_dirs.add(obj.class_folder)
+        obj_dir = dump_dir / obj.class_folder / obj.name
+        obj_bin = obj_dir / bsl.BIN_DIRNAME
+        obj_bin.mkdir(parents=True, exist_ok=True)
+        for stem in sorted(obj.related_stems):
+            for src in index.take_stem_paths(stem):
+                _safe_move(src, obj_bin / src.name)
+        _extract_object_modules(obj_dir, obj.object_uuid)
+        objects_index.append((obj.rel_dir, obj.object_uuid))
+
+    for class_dir in created_class_dirs:
+        index.forget(class_dir)
+
+    for item in index.remaining_paths():
+        name = item.name
+        if name in (bsl.BIN_DIRNAME, bsl.META_DIRNAME):
+            continue
+        if name in created_class_dirs:
+            continue
+        dest = root_bin / name
+        _safe_move(item, dest)
+        index.forget(name)
+        root_renames.append((name, f"{bsl.BIN_DIRNAME}/{name}"))
+
+    with (root_meta / CF_OBJECTS_FILENAME).open("w", encoding="utf-8") as f:
+        for rel, uuid in sorted(objects_index, key=lambda x: x[0]):
+            f.write(f"{rel}{bsl.RENAMES_ARROW}{uuid}\n")
+    with (root_meta / "renames.txt").open("w", encoding="utf-8") as f:
+        for target, source in sorted(set(root_renames), key=lambda x: x[0]):
+            if target.endswith(".bsl"):
                 continue
-            _extract_root_prefixed_object(dump_dir, obj, staging, root_renames)
-            for stem in obj.related_stems:
-                claimed.add(stem)
-            objects_index.append((f"@{obj.root_prefix}{obj.name}", obj.object_uuid))
-
-        _extract_config_modules(dump_dir, config_text, staging, root_renames)
-
-        # Class/Name objects
-        for obj in objects:
-            if obj.root_prefix is not None:
-                continue
-            obj_dir = staging / obj.class_folder / obj.name
-            obj_bin = obj_dir / bsl.BIN_DIRNAME
-            obj_bin.mkdir(parents=True, exist_ok=True)
-            for stem in sorted(obj.related_stems):
-                for src in _iter_stem_paths(dump_dir, stem):
-                    _safe_move(src, obj_bin / src.name)
-                    claimed.add(stem)
-            _extract_object_modules(obj_dir, obj.object_uuid)
-            objects_index.append((obj.rel_dir, obj.object_uuid))
-
-        # Remaining dump files → root bin (including root/version/versions/config descriptor)
-        for item in list(dump_dir.iterdir()):
-            name = item.name
-            stem = name.split(".", 1)[0].lower()
-            if stem in claimed and name not in ROOT_MARKER_FILES:
-                # might still have leftover if partial
-                if not item.exists():
-                    continue
-            if not item.exists():
-                continue
-            dest = root_bin / name
-            _safe_move(item, dest)
-            root_renames.append((name, f"{bsl.BIN_DIRNAME}/{name}"))
-
-        # Write root meta
-        with (root_meta / CF_OBJECTS_FILENAME).open("w", encoding="utf-8") as f:
-            for rel, uuid in sorted(objects_index, key=lambda x: x[0]):
-                f.write(f"{rel}{bsl.RENAMES_ARROW}{uuid}\n")
-        with (root_meta / "renames.txt").open("w", encoding="utf-8") as f:
-            for target, source in sorted(set(root_renames), key=lambda x: x[0]):
-                if target.endswith(".bsl"):
-                    continue
-                f.write(f"{target}{bsl.RENAMES_ARROW}{source}\n")
-        bsl_root_entries = [
-            (t, s) for t, s in root_renames if t.endswith(".bsl")
-        ]
-        if bsl_root_entries:
-            bsl.write_bsl_renames_file(staging, sorted(set(bsl_root_entries)))
-
-        # Replace dump_dir contents with staging
-        for item in list(dump_dir.iterdir()):
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
-        for item in staging.iterdir():
-            shutil.move(str(item), str(dump_dir / item.name))
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+            f.write(f"{target}{bsl.RENAMES_ARROW}{source}\n")
+    bsl_root_entries = [(t, s) for t, s in root_renames if t.endswith(".bsl")]
+    if bsl_root_entries:
+        bsl.write_bsl_renames_file(dump_dir, sorted(set(bsl_root_entries)))
 
     logger.info(f"CF layout organized in '{dump_dir}'")
 
@@ -468,24 +494,15 @@ def prepare_configuration_for_build(input_dir: Path, temp_parent: Path) -> Path:
                 if bin_dir.is_dir():
                     _copy_tree_entries(bin_dir, temp_dump)
 
-    # Root bin + root BSL merge
     if (input_dir / bsl.META_DIRNAME / bsl.BSL_RENAMES_FILENAME).is_file() and (
         input_dir / bsl.BIN_DIRNAME
     ).is_dir():
-        # Ensure renames.txt exists for prepare_temp_for_build
-        root_renames = input_dir / bsl.META_DIRNAME / "renames.txt"
-        if root_renames.is_file() and (
-            input_dir / bsl.META_DIRNAME / bsl.BSL_RENAMES_FILENAME
-        ).is_file():
-            # has_bin_layout requires both renames; synthesize minimal if needed
-            pass
         if bsl.has_bin_layout(input_dir):
             prepared_root = bsl.prepare_temp_for_build(
                 input_dir, temp_parent / "cf_root"
             )
             _copy_tree_entries(prepared_root, temp_dump)
         else:
-            # merge root bsl manually then copy bin
             bsl.merge_dir(input_dir)
             _copy_tree_entries(input_dir / bsl.BIN_DIRNAME, temp_dump)
     elif (input_dir / bsl.BIN_DIRNAME).is_dir():
