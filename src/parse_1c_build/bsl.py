@@ -302,6 +302,18 @@ def _extract_plain_module(
     return True
 
 
+def _looks_like_tuple_module(content: str) -> bool:
+    """True if content looks like a 1C tuple that may embed a BSL module."""
+    stripped = content.lstrip("\ufeff").lstrip()
+    if not stripped.startswith("{"):
+        return False
+    # XML schemas / other UUID.0 payloads are not tuple forms; the tuple regex
+    # can hang (catastrophic backtracking) on them.
+    if stripped.startswith("<?xml") or stripped.startswith("<"):
+        return False
+    return True
+
+
 def _extract_managed_form(
     path: Path,
     content: str,
@@ -310,6 +322,8 @@ def _extract_managed_form(
 ) -> bool:
     """Handle managed form (UUID.0) with BSL in tuple. Return True if extracted."""
     if content.startswith(MOXCEL_FORM_PREFIX):
+        return False
+    if not _looks_like_tuple_module(content):
         return False
 
     form_result = _find_form_module_by_tuple(content)
