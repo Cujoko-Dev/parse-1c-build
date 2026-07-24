@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -199,8 +200,9 @@ def _discover_objects(
     return config_uuid, config_text, objects
 
 
-def _safe_move(src: Path, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
+def _safe_move(src: Path, dest: Path, *, ensure_parent: bool = True) -> None:
+    if ensure_parent:
+        dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         if dest.is_dir():
             shutil.rmtree(dest)
@@ -236,11 +238,12 @@ def _extract_root_prefixed_object(
     """Place dump files into root _bin/ and extract BSL with root_prefix."""
     assert obj.root_prefix is not None
     bin_dir = root / bsl.BIN_DIRNAME
+    bin_dir.mkdir(parents=True, exist_ok=True)
     for stem in sorted(obj.related_stems):
         for src in index.take_stem_paths(stem):
             rel = src.name
             dest = bin_dir / rel
-            _safe_move(src, dest)
+            _safe_move(src, dest, ensure_parent=False)
             renames.append((rel, f"{bsl.BIN_DIRNAME}/{rel}"))
 
     text_path = bin_dir / f"{obj.object_uuid}.0" / "text"
@@ -275,43 +278,83 @@ def _extract_root_prefixed_object(
 def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
     """Extract modules inside an object mini-layout (_bin already filled)."""
     bin_dir = object_dir / bsl.BIN_DIRNAME
+    if not bin_dir.is_dir():
+        return
     meta_dir = object_dir / bsl.META_DIRNAME
     meta_dir.mkdir(parents=True, exist_ok=True)
-    renames: list[tuple[str, str]] = []
+    bsl_renames: list[tuple[str, str]] = []
+    renames_txt: list[str] = []
     handled_texts: set[Path] = set()
+    texts: list[Path] = []
+    form_items: list[Path] = []
 
-    def _add_plain(text_path: Path, bsl_name: str) -> None:
-        if text_path in handled_texts or not text_path.is_file():
+    # One walk: collect files, build renames.txt entries, classify candidates.
+    for dirpath, _dirnames, filenames in os.walk(bin_dir):
+        base = Path(dirpath)
+        for filename in filenames:
+            path = base / filename
+            rel = path.relative_to(bin_dir).as_posix()
+            renames_txt.append(
+                f"{rel}{bsl.RENAMES_ARROW}{bsl.BIN_DIRNAME}/{rel}\n"
+            )
+            if filename == "text":
+                texts.append(path)
+            elif bsl.is_managed_form_file(path):
+                form_items.append(path)
+            elif filename == "module" and base.name.endswith(".0"):
+                form_items.append(path)
+
+    def _add_plain(
+        text_path: Path, bsl_name: str, *, raw: bytes | None = None
+    ) -> None:
+        if text_path in handled_texts:
             return
-        body = text_path.read_bytes().decode("utf-8-sig")
-        if body.strip() == "":
+        if raw is None:
+            if not text_path.is_file():
+                return
+            raw = text_path.read_bytes()
+        body = raw[3:] if raw.startswith(b"\xef\xbb\xbf") else raw
+        if not body.decode("utf-8-sig").strip():
             return
         dest = object_dir / bsl_name
         if dest.exists():
             return
-        if _extract_plain_module(text_path, dest):
-            rel = text_path.relative_to(bin_dir).as_posix()
-            renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{rel}"))
-            handled_texts.add(text_path)
+        dest.write_bytes(body)
+        text_path.write_bytes(
+            b"\xef\xbb\xbf" + bsl.BSL_PLACEHOLDER.encode("utf-8")
+        )
+        rel = text_path.relative_to(bin_dir).as_posix()
+        bsl_renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{rel}"))
+        handled_texts.add(text_path)
 
-    _add_plain(bin_dir / f"{object_uuid}.0" / "text", f"{bsl.BSL_PREFIX_OBJECT}Объект.bsl")
+    object_uuid_l = object_uuid.lower()
+    _add_plain(
+        bin_dir / f"{object_uuid}.0" / "text",
+        f"{bsl.BSL_PREFIX_OBJECT}Объект.bsl",
+    )
 
-    mgr_text = bin_dir / f"{object_uuid}.2" / "text"
-    if mgr_text.is_file():
-        body = mgr_text.read_bytes().decode("utf-8-sig")
-        if body.strip() and "ОбработкаКоманды" not in body:
-            _add_plain(mgr_text, f"{bsl.BSL_PREFIX_OBJECT}Менеджер.bsl")
-
-    for text_path in sorted(bin_dir.rglob("text")):
-        if text_path in handled_texts or not text_path.is_file():
+    for text_path in texts:
+        if text_path in handled_texts:
             continue
         parent_name = text_path.parent.name
         if not parent_name.endswith(".2"):
             continue
-        body = text_path.read_bytes().decode("utf-8-sig")
-        if "ОбработкаКоманды" not in body or not body.strip():
+        raw = text_path.read_bytes()
+        body = raw[3:] if raw.startswith(b"\xef\xbb\xbf") else raw
+        text = body.decode("utf-8-sig")
+        if not text.strip():
             continue
         stem = parent_name[:-2]
+        is_command = "ОбработкаКоманды" in text
+        if stem.lower() == object_uuid_l and not is_command:
+            _add_plain(
+                text_path,
+                f"{bsl.BSL_PREFIX_OBJECT}Менеджер.bsl",
+                raw=raw,
+            )
+            continue
+        if not is_command:
+            continue
         cmd_name = stem
         desc = bin_dir / stem
         if desc.is_file():
@@ -323,34 +366,29 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
         bsl_name = f"{bsl.BSL_PREFIX_COMMAND}{cmd_name}.bsl"
         if (object_dir / bsl_name).exists():
             bsl_name = f"{bsl.BSL_PREFIX_COMMAND}{cmd_name}_{stem[:8]}.bsl"
-        _add_plain(text_path, bsl_name)
+        _add_plain(text_path, bsl_name, raw=raw)
 
-    for item in sorted(bin_dir.rglob("*"), key=lambda p: (len(p.parts), str(p))):
-        if item.is_dir() or item.suffix.lower() == ".bsl":
-            continue
-        if item.name == "text":
-            continue
+    form_items.sort(key=lambda p: (len(p.parts), str(p)))
+    for item in form_items:
         companion = item.relative_to(bin_dir).as_posix()
-        bsl_name: str | None = None
+        form_bsl_name: str | None = None
         if bsl.is_managed_form_file(item):
             form_name = bsl.get_form_or_object_name(bin_dir, item.name)
             if form_name:
-                bsl_name = f"{bsl.BSL_PREFIX_FORM}{form_name}.bsl"
+                form_bsl_name = f"{bsl.BSL_PREFIX_FORM}{form_name}.bsl"
         elif item.name == "module" and item.parent.name.endswith(".0"):
             form_name = bsl.get_form_or_object_name(bin_dir, item.parent.name)
             if form_name:
-                bsl_name = f"{bsl.BSL_PREFIX_FORM}{form_name}.bsl"
-        if bsl_name and bsl.split_file(item, object_dir / bsl_name):
-            renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{companion}"))
+                form_bsl_name = f"{bsl.BSL_PREFIX_FORM}{form_name}.bsl"
+        if form_bsl_name and bsl.split_file(item, object_dir / form_bsl_name):
+            bsl_renames.append(
+                (form_bsl_name, f"{bsl.BIN_DIRNAME}/{companion}")
+            )
 
     with (meta_dir / "renames.txt").open("w", encoding="utf-8") as f:
-        for path in sorted(bin_dir.rglob("*")):
-            if path.is_dir():
-                continue
-            rel = path.relative_to(bin_dir).as_posix()
-            f.write(f"{rel}{bsl.RENAMES_ARROW}{bsl.BIN_DIRNAME}/{rel}\n")
-    if renames:
-        bsl.write_bsl_renames_file(object_dir, sorted(set(renames)))
+        f.writelines(sorted(renames_txt))
+    if bsl_renames:
+        bsl.write_bsl_renames_file(object_dir, sorted(set(bsl_renames)))
 
 
 def _extract_config_modules(
@@ -420,6 +458,7 @@ def organize_configuration_dir(dump_dir: Path) -> None:
 
     _extract_config_modules(index, config_text, dump_dir, root_renames)
 
+    extract_jobs: list[tuple[Path, str]] = []
     for obj in objects:
         if obj.root_prefix is not None:
             continue
@@ -428,16 +467,26 @@ def organize_configuration_dir(dump_dir: Path) -> None:
         obj_bin.mkdir(parents=True, exist_ok=True)
         for stem in sorted(obj.related_stems):
             for src in index.take_stem_paths(stem):
-                _safe_move(src, obj_bin / src.name)
-        _extract_object_modules(obj_dir, obj.object_uuid)
+                _safe_move(src, obj_bin / src.name, ensure_parent=False)
+        extract_jobs.append((obj_dir, obj.object_uuid))
         objects_index.append((obj.rel_dir, obj.object_uuid))
+
+    if extract_jobs:
+        workers = min(32, max(4, (os.cpu_count() or 4) * 2))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(_extract_object_modules, obj_dir, object_uuid)
+                for obj_dir, object_uuid in extract_jobs
+            ]
+            for fut in as_completed(futures):
+                fut.result()
 
     for item in index.remaining_paths():
         name = item.name
         if name in (bsl.BIN_DIRNAME, bsl.META_DIRNAME, bsl.OBJECTS_DIRNAME):
             continue
         dest = root_bin / name
-        _safe_move(item, dest)
+        _safe_move(item, dest, ensure_parent=False)
         index.forget(name)
         root_renames.append((name, f"{bsl.BIN_DIRNAME}/{name}"))
 
