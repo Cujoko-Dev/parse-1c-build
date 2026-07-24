@@ -57,9 +57,11 @@ BIN_DIRNAME = "bin"
 META_DIRNAME = "meta"
 # Разделитель в renames (как в renames.txt): "имя --> путь"
 RENAMES_ARROW = " --> "
-# Префиксы имён BSL в корне: 0_ — модуль объекта (обработки), 1_ — модуль формы
+# Префиксы имён BSL: 0_ объект/менеджер/…, 1_ формы, 2_ команды, 9_ общие модули (корень CF)
 BSL_PREFIX_OBJECT = "0_"
 BSL_PREFIX_FORM = "1_"
+BSL_PREFIX_COMMAND = "2_"
+BSL_PREFIX_COMMON_MODULE = "9_"
 
 _MANAGED_FORM_NAME_SUFFIXES: frozenset[str] = frozenset({"управляемая", "managed"})
 _ORDINARY_FORM_NAME_SUFFIXES: frozenset[str] = frozenset({"обычная", "ordinary"})
@@ -142,12 +144,16 @@ def _writer_for_encoding(encoding: str) -> Callable[[Path, str], None]:
     return lambda p, s: _write_text_no_newline_translate(p, s, encoding)
 
 
-def _is_managed_form_file(path: Path) -> bool:
+def is_managed_form_file(path: Path) -> bool:
     """True if *path* is a managed form (UUID.0)."""
     return _RE_MANAGED_FORM_FILE.match(path.name) is not None
 
 
-def _get_form_or_object_name(root: Path, uuid_dot0_name: str) -> str | None:
+# Backward-compatible private alias
+_is_managed_form_file = is_managed_form_file
+
+
+def get_form_or_object_name(root: Path, uuid_dot0_name: str) -> str | None:
     """Read description file (UUID) and return form/object name, or None.
 
     The form/module content lives in UUID.0 (file for managed form, dir for
@@ -165,6 +171,14 @@ def _get_form_or_object_name(root: Path, uuid_dot0_name: str) -> str | None:
     content, _ = result
     m = _RE_FORM_DESC_NAME.search(content)
     return m.group(1) if m else None
+
+
+_get_form_or_object_name = get_form_or_object_name
+
+
+def write_bsl_renames_file(root: Path, renames_entries: list[tuple[str, str]]) -> None:
+    """Public wrapper: write meta/bsl_renames.txt."""
+    _write_bsl_renames_file(root, renames_entries)
 
 
 def _find_form_module_by_tuple(

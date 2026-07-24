@@ -4,9 +4,16 @@ from cjk_commons.settings import get_attribute, get_path_attribute, get_settings
 
 from parse_1c_build.__about__ import APP_AUTHOR, APP_NAME
 
-# File extensions for EPF/ERF and MD/ERT (used by Parser and Builder).
+# File extensions for containers handled by Parser and Builder.
 EXTENSIONS_EPF_ERF = (".epf", ".erf")
+EXTENSIONS_CF_CFE = (".cf", ".cfe")
+EXTENSIONS_V8UNPACK = EXTENSIONS_EPF_ERF + EXTENSIONS_CF_CFE
 EXTENSIONS_MD_ERT = (".md", ".ert")
+
+USE_READER_DEPRECATED_MSG = (
+    "--use-reader is deprecated and will be removed; "
+    "it only applies to .epf/.erf (V8Reader)"
+)
 
 
 class Processor:
@@ -27,6 +34,13 @@ class Processor:
         self.use_reader = get_attribute(
             kwargs, "use_reader", self.settings, "use_reader", default=False
         )
+        self._use_reader_warned = False
+
+    def warn_use_reader_deprecated(self, logger) -> None:
+        """Log deprecation once per processor instance when use_reader is set."""
+        if self.use_reader and not self._use_reader_warned:
+            logger.warning(USE_READER_DEPRECATED_MSG)
+            self._use_reader_warned = True
 
     def get_v8_unpack_file_path(self, **kwargs) -> Path:
         return get_path_attribute(
@@ -66,7 +80,10 @@ def add_generic_arguments(subparser) -> None:
         "-u",
         "--use-reader",
         action="store_true",
-        help="Parse or build with V8Reader",
+        help=(
+            "Deprecated; will be removed. "
+            "Parse or build .epf/.erf with V8Reader"
+        ),
     )
 
     # todo Добавить help

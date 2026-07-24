@@ -5,10 +5,12 @@ from pathlib import Path
 from loguru import logger
 import questionary
 
-from parse_1c_build import bsl
+from parse_1c_build import bsl, cf_layout
 from parse_1c_build.base import (
+    EXTENSIONS_CF_CFE,
     EXTENSIONS_EPF_ERF,
     EXTENSIONS_MD_ERT,
+    EXTENSIONS_V8UNPACK,
     Processor,
     add_generic_arguments,
 )
@@ -17,7 +19,8 @@ from parse_1c_build.process_utils import check_silent
 logger.disable(__name__)
 
 ERR_CWD_INPUTS_NOT_FOUND = (
-    "Не найдено подходящих каталогов исходников (*_epf_src, *_erf_src, …) "
+    "Не найдено подходящих каталогов исходников "
+    "(*_epf_src, *_erf_src, *_cf_src, *_cfe_src, …) "
     "в текущем каталоге (и подкаталогах). Укажите каталог или используйте -i"
 )
 ERR_INTERACTIVE_NOT_FOUND = "Не найдено подходящих входных каталогов для интерактивного выбора"
@@ -51,7 +54,7 @@ def _backup_existing(path: Path) -> None:
 
 def _input_dirs_get() -> list[Path]:
     """Возвращает список входных каталогов исходников для интерактивного выбора."""
-    allowed_ext = {ext[1:] for ext in (*EXTENSIONS_EPF_ERF, *EXTENSIONS_MD_ERT)}
+    allowed_ext = {ext[1:] for ext in (*EXTENSIONS_V8UNPACK, *EXTENSIONS_MD_ERT)}
     input_dirs = []
     for dir_path in Path.cwd().rglob("*_src"):
         if not dir_path.is_dir():
@@ -113,6 +116,7 @@ class Builder(Processor):
     def _get_source_dir_for_epf_build(self, input_dir_path: Path) -> Path:
         """Return path to source directory for v8unpack -B (temp or input_dir_path)."""
         if self.use_reader:
+            self.warn_use_reader_deprecated(logger)
             return self._build_temp_from_renames(input_dir_path)
         if bsl.has_bin_layout(input_dir_path):
             temp_parent = Path(tempfile.mkdtemp())
@@ -134,6 +138,33 @@ class Builder(Processor):
         """Build EPF/ERF from source directory via v8unpack -B."""
         source_dir = self._get_source_dir_for_epf_build(input_dir_path)
         args = [str(self.get_v8_unpack_file_path()), "-B", str(source_dir), str(output_file_path)]
+        check_silent(args)
+        logger.info(f"'{output_file_path}' built from '{input_dir_path}'")
+
+    def _run_cf_cfe_build(
+        self,
+        input_dir_path: Path,
+        output_file_path: Path,
+    ) -> None:
+        """Build CF/CFE from organized or raw source directory via v8unpack -B."""
+        if self.use_reader:
+            self.warn_use_reader_deprecated(logger)
+            logger.warning(
+                "--use-reader is ignored for .cf/.cfe; using v8unpack"
+            )
+        if cf_layout.has_cf_layout(input_dir_path):
+            temp_parent = Path(tempfile.mkdtemp())
+            source_dir = cf_layout.prepare_configuration_for_build(
+                input_dir_path, temp_parent
+            )
+        else:
+            source_dir = input_dir_path
+        args = [
+            str(self.get_v8_unpack_file_path()),
+            "-B",
+            str(source_dir),
+            str(output_file_path),
+        ]
         check_silent(args)
         logger.info(f"'{output_file_path}' built from '{input_dir_path}'")
 
@@ -167,6 +198,8 @@ class Builder(Processor):
         suffix = output_file_path.suffix.lower()
         if suffix in EXTENSIONS_EPF_ERF:
             self._run_epf_erf_build(input_dir_path, output_file_path)
+        elif suffix in EXTENSIONS_CF_CFE:
+            self._run_cf_cfe_build(input_dir_path, output_file_path)
         elif suffix in EXTENSIONS_MD_ERT:
             self._run_md_ert_build(input_dir_path, output_file_path)
         else:
@@ -195,6 +228,7 @@ def run(args) -> None:
     logger.enable("cjk_commons")
     logger.enable("commons_1c")
     logger.enable(Builder.__module__)
+    logger.enable(cf_layout.__name__)
     try:
         builder = Builder(**vars(args))
         output_path = None if args.output is None else Path(args.output)
