@@ -56,6 +56,8 @@ BSL_RENAMES_FILENAME = "bsl_renames.txt"
 BIN_DIRNAME = "_bin"
 # Каталог со вспомогательными для сборки файлами (bsl_renames.txt, renames.txt)
 META_DIRNAME = "_meta"
+# CF/CFE: Class/Name trees live under this folder (Catalogs, Documents, …).
+OBJECTS_DIRNAME = "_objects"
 # Разделитель в renames (как в renames.txt): "имя --> путь"
 RENAMES_ARROW = " --> "
 # Префиксы имён BSL: 0_ объект/менеджер/…, 1_ формы, 2_ команды, 9_ общие модули (корень CF)
@@ -481,7 +483,7 @@ def _apply_bin_layout(root: Path) -> None:
     bin_path = root / BIN_DIRNAME
     bin_path.mkdir(exist_ok=True)
     for p in list(root.iterdir()):
-        if p.name in (META_DIRNAME, BIN_DIRNAME):
+        if p.name in (META_DIRNAME, BIN_DIRNAME, OBJECTS_DIRNAME):
             continue
         if p.is_file() and p.suffix.lower() == ".bsl":
             continue
@@ -545,7 +547,7 @@ def split_dir(
     for item in items:
         if item.is_dir() or item.suffix.lower() == ".bsl":
             continue
-        if META_DIRNAME in item.parts:
+        if META_DIRNAME in item.parts or OBJECTS_DIRNAME in item.parts:
             continue
         # Skip files under _bin/ when using bin layout: they are from a previous run (with placeholder)
         if use_bin_layout and BIN_DIRNAME in item.parts:

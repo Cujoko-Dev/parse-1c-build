@@ -2,7 +2,7 @@
 name: parse-1c-build-architecture
 description: >-
   Architecture of parse-1c-build: EPF/ERF/CF/CFE unpack/pack pipeline (v8unpack, V8Reader, gcomp),
-  BSL extraction layout (prefixes 0_/1_/2_/9_, Class/Object for CF), _meta/_bin structure,
+  BSL extraction layout (prefixes 0_/1_/2_/9_, _objects/Class/Name for CF), _meta/_bin structure,
   and round-trip rebuild. Use when modifying Parser/Builder, extending BSL split/merge,
   debugging roundtrip mismatches, or working with the p1cb CLI.
 ---
@@ -62,8 +62,8 @@ Parser.run(input.cf)
   → output dir = parent / "{stem}_cf_src"
   → v8unpack -P
   → (если не --raw) cf_layout.organize_configuration_dir
-       → Справочники/Имя/{0_*.bsl,1_*.bsl,2_*.bsl,_bin,_meta}
-       → корень: 0_/1_/2_/9_*.bsl + _bin/_meta
+       → _objects/Catalogs|Documents|…/Name/{0_*.bsl,1_*.bsl,2_*.bsl,_bin,_meta}
+       → корень: 0_/1_/2_/9_*.bsl + _bin/_meta/_objects
 ```
 
 ## Типы форм и как извлекается BSL (`bsl.py`)

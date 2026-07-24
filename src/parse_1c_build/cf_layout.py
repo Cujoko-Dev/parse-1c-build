@@ -52,7 +52,7 @@ class MetaObject:
     def rel_dir(self) -> str:
         if self.root_prefix is not None:
             return ""
-        return f"{self.class_folder}/{self.name}"
+        return f"{bsl.OBJECTS_DIRNAME}/{self.class_folder}/{self.name}"
 
 
 @dataclass
@@ -164,7 +164,7 @@ def _discover_objects(
 
     for type_uuid, uuids in _parse_collections(config_text):
         class_folder, root_prefix = METADATA_TYPES.get(
-            type_uuid, (f"Тип_{type_uuid[:8]}", None)
+            type_uuid, (f"Type_{type_uuid[:8]}", None)
         )
         for object_uuid in uuids:
             top_level.add(object_uuid)
@@ -382,7 +382,7 @@ def _extract_config_modules(
 
 
 def organize_configuration_dir(dump_dir: Path) -> None:
-    """Transform flat v8unpack CF dump into Class/Object + root BSL layout."""
+    """Transform flat v8unpack CF dump into _objects/Class/Name + root BSL layout."""
     dump_dir = dump_dir.resolve()
     index = DumpIndex.build(dump_dir)
     _config_uuid, config_text, objects = _discover_objects(dump_dir, index)
@@ -391,14 +391,16 @@ def organize_configuration_dir(dump_dir: Path) -> None:
     # In-place: keep moves on the same volume (rename), no staging copy.
     root_bin = dump_dir / bsl.BIN_DIRNAME
     root_meta = dump_dir / bsl.META_DIRNAME
+    objects_root = dump_dir / bsl.OBJECTS_DIRNAME
     root_bin.mkdir(parents=True, exist_ok=True)
     root_meta.mkdir(parents=True, exist_ok=True)
+    objects_root.mkdir(parents=True, exist_ok=True)
     index.forget(bsl.BIN_DIRNAME)
     index.forget(bsl.META_DIRNAME)
+    index.forget(bsl.OBJECTS_DIRNAME)
 
     root_renames: list[tuple[str, str]] = []
     objects_index: list[tuple[str, str]] = []
-    created_class_dirs: set[str] = set()
 
     for obj in objects:
         if obj.root_prefix is None:
@@ -411,8 +413,7 @@ def organize_configuration_dir(dump_dir: Path) -> None:
     for obj in objects:
         if obj.root_prefix is not None:
             continue
-        created_class_dirs.add(obj.class_folder)
-        obj_dir = dump_dir / obj.class_folder / obj.name
+        obj_dir = objects_root / obj.class_folder / obj.name
         obj_bin = obj_dir / bsl.BIN_DIRNAME
         obj_bin.mkdir(parents=True, exist_ok=True)
         for stem in sorted(obj.related_stems):
@@ -421,14 +422,9 @@ def organize_configuration_dir(dump_dir: Path) -> None:
         _extract_object_modules(obj_dir, obj.object_uuid)
         objects_index.append((obj.rel_dir, obj.object_uuid))
 
-    for class_dir in created_class_dirs:
-        index.forget(class_dir)
-
     for item in index.remaining_paths():
         name = item.name
-        if name in (bsl.BIN_DIRNAME, bsl.META_DIRNAME):
-            continue
-        if name in created_class_dirs:
+        if name in (bsl.BIN_DIRNAME, bsl.META_DIRNAME, bsl.OBJECTS_DIRNAME):
             continue
         dest = root_bin / name
         _safe_move(item, dest)
