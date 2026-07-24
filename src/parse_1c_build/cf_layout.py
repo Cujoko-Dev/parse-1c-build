@@ -27,11 +27,12 @@ _RE_COLLECTION = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     r"),(\d+)((?:,[0-9a-fA-F-]{36})*)\}"
 )
+# Metadata identity: older dumps use {0,0,uuid},"Name"; newer (e.g. Retail) use {1,0,...}.
 _RE_OBJECT_NAME = re.compile(
-    r'\{0,0,([0-9a-fA-F-]{36})\},"([^"]+)"'
+    r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"'
 )
 _RE_CONFIG_IDENTITY = re.compile(
-    r'\{0,0,([0-9a-fA-F-]{36})\},"([^"]+)"'
+    r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"'
 )
 
 CF_OBJECTS_FILENAME = "cf_objects.txt"
