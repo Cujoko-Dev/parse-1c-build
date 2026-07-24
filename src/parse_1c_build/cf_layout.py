@@ -244,6 +244,8 @@ def _extract_root_prefixed_object(
             renames.append((rel, f"{bsl.BIN_DIRNAME}/{rel}"))
 
     text_path = bin_dir / f"{obj.object_uuid}.0" / "text"
+    # Common commands store the handler module in uuid.2/text (not .0).
+    command_text_path = bin_dir / f"{obj.object_uuid}.2" / "text"
     form_path = bin_dir / f"{obj.object_uuid}.0"
     bsl_name = f"{obj.root_prefix}{obj.name}.bsl"
     bsl_path = root / bsl_name
@@ -253,6 +255,14 @@ def _extract_root_prefixed_object(
                 (
                     bsl_name,
                     f"{bsl.BIN_DIRNAME}/{obj.object_uuid}.0/text",
+                )
+            )
+    elif command_text_path.is_file():
+        if _extract_plain_module(command_text_path, bsl_path):
+            renames.append(
+                (
+                    bsl_name,
+                    f"{bsl.BIN_DIRNAME}/{obj.object_uuid}.2/text",
                 )
             )
     elif form_path.is_file() and not form_path.is_dir():
