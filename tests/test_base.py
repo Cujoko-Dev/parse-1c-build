@@ -7,7 +7,7 @@ from parse_1c_build.base import Processor
 
 def test_processor_1():
     with pytest.raises(Exception) as exc:
-        Processor(settings_file_path=Path("tests/data/settings.yaml"))
+        Processor(settings_file_path=Path("tests/fixtures/settings.yaml"))
         assert exc == "There is no GComp in settings"
 
 

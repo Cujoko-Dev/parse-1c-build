@@ -55,11 +55,15 @@ BSL_RENAMES_FILENAME = "bsl_renames.txt"
 BIN_DIRNAME = "bin"
 # Каталог со вспомогательными для сборки файлами (bsl_renames.txt, renames.txt)
 META_DIRNAME = "meta"
+# CF/CFE: Class/Name trees live under this folder (Catalogs, Documents, …).
+OBJECTS_DIRNAME = "objects"
 # Разделитель в renames (как в renames.txt): "имя --> путь"
 RENAMES_ARROW = " --> "
-# Префиксы имён BSL в корне: 0_ — модуль объекта (обработки), 1_ — модуль формы
+# Префиксы имён BSL: 0_ объект/менеджер/…, 1_ формы, 2_ команды, 9_ общие модули (корень CF)
 BSL_PREFIX_OBJECT = "0_"
 BSL_PREFIX_FORM = "1_"
+BSL_PREFIX_COMMAND = "2_"
+BSL_PREFIX_COMMON_MODULE = "9_"
 
 _MANAGED_FORM_NAME_SUFFIXES: frozenset[str] = frozenset({"управляемая", "managed"})
 _ORDINARY_FORM_NAME_SUFFIXES: frozenset[str] = frozenset({"обычная", "ordinary"})
@@ -142,12 +146,16 @@ def _writer_for_encoding(encoding: str) -> Callable[[Path, str], None]:
     return lambda p, s: _write_text_no_newline_translate(p, s, encoding)
 
 
-def _is_managed_form_file(path: Path) -> bool:
+def is_managed_form_file(path: Path) -> bool:
     """True if *path* is a managed form (UUID.0)."""
     return _RE_MANAGED_FORM_FILE.match(path.name) is not None
 
 
-def _get_form_or_object_name(root: Path, uuid_dot0_name: str) -> str | None:
+# Backward-compatible private alias
+_is_managed_form_file = is_managed_form_file
+
+
+def get_form_or_object_name(root: Path, uuid_dot0_name: str) -> str | None:
     """Read description file (UUID) and return form/object name, or None.
 
     The form/module content lives in UUID.0 (file for managed form, dir for
@@ -165,6 +173,14 @@ def _get_form_or_object_name(root: Path, uuid_dot0_name: str) -> str | None:
     content, _ = result
     m = _RE_FORM_DESC_NAME.search(content)
     return m.group(1) if m else None
+
+
+_get_form_or_object_name = get_form_or_object_name
+
+
+def write_bsl_renames_file(root: Path, renames_entries: list[tuple[str, str]]) -> None:
+    """Public wrapper: write meta/bsl_renames.txt."""
+    _write_bsl_renames_file(root, renames_entries)
 
 
 def _find_form_module_by_tuple(
@@ -288,6 +304,18 @@ def _extract_plain_module(
     return True
 
 
+def _looks_like_tuple_module(content: str) -> bool:
+    """True if content looks like a 1C tuple that may embed a BSL module."""
+    stripped = content.lstrip("\ufeff").lstrip()
+    if not stripped.startswith("{"):
+        return False
+    # XML schemas / other UUID.0 payloads are not tuple forms; the tuple regex
+    # can hang (catastrophic backtracking) on them.
+    if stripped.startswith("<?xml") or stripped.startswith("<"):
+        return False
+    return True
+
+
 def _extract_managed_form(
     path: Path,
     content: str,
@@ -296,6 +324,8 @@ def _extract_managed_form(
 ) -> bool:
     """Handle managed form (UUID.0) with BSL in tuple. Return True if extracted."""
     if content.startswith(MOXCEL_FORM_PREFIX):
+        return False
+    if not _looks_like_tuple_module(content):
         return False
 
     form_result = _find_form_module_by_tuple(content)
@@ -452,7 +482,7 @@ def _apply_bin_layout(root: Path) -> None:
     bin_path = root / BIN_DIRNAME
     bin_path.mkdir(exist_ok=True)
     for p in list(root.iterdir()):
-        if p.name in (META_DIRNAME, BIN_DIRNAME):
+        if p.name in (META_DIRNAME, BIN_DIRNAME, OBJECTS_DIRNAME):
             continue
         if p.is_file() and p.suffix.lower() == ".bsl":
             continue
@@ -516,7 +546,7 @@ def split_dir(
     for item in items:
         if item.is_dir() or item.suffix.lower() == ".bsl":
             continue
-        if META_DIRNAME in item.parts:
+        if META_DIRNAME in item.parts or OBJECTS_DIRNAME in item.parts:
             continue
         # Skip files under bin/ when using bin layout: they are from a previous run (with placeholder)
         if use_bin_layout and BIN_DIRNAME in item.parts:
@@ -529,13 +559,13 @@ def split_dir(
             except ValueError:
                 rel = item
             companion = str(rel).replace("\\", "/")
-            companion_after_bin = (
+            companion_afterbin = (
                 f"{BIN_DIRNAME}/{companion}" if use_bin_layout else companion
             )
 
             def _choose_bsl_name(base_name: str) -> str:
                 existing = existing_companion_to_bsl.get(
-                    companion_after_bin
+                    companion_afterbin
                 ) or existing_companion_to_bsl.get(companion)
                 return existing if existing else f"{base_name}.bsl"
 
@@ -629,11 +659,11 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
     Возвращает путь к подготовленному каталогу (temp_parent / input_dir_path.name).
     """
     temp_source_dir_path = temp_parent / input_dir_path.name
-    temp_source_dir_path.mkdir(parents=True)
+    temp_source_dir_path.mkdir(parents=True, exist_ok=True)
     meta_dir = input_dir_path / META_DIRNAME
     renames_path = meta_dir / "renames.txt"
     bsl_renames_path = meta_dir / BSL_RENAMES_FILENAME
-    prefix_bin = BIN_DIRNAME + "/"
+    prefixbin = BIN_DIRNAME + "/"
 
     with renames_path.open(encoding="utf-8-sig") as f:
         for line in f:
@@ -654,9 +684,9 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
     for bsl_file in input_dir_path.glob("*.bsl"):
         shutil.copy2(bsl_file, temp_source_dir_path / bsl_file.name)
 
-    temp_meta = temp_source_dir_path / META_DIRNAME
-    temp_meta.mkdir(parents=True, exist_ok=True)
-    temp_bsl_renames = temp_meta / BSL_RENAMES_FILENAME
+    tempmeta = temp_source_dir_path / META_DIRNAME
+    tempmeta.mkdir(parents=True, exist_ok=True)
+    temp_bsl_renames = tempmeta / BSL_RENAMES_FILENAME
     with bsl_renames_path.open(encoding="utf-8") as rf:
         lines = rf.readlines()
     with temp_bsl_renames.open("w", encoding="utf-8") as tf:
@@ -666,12 +696,12 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
                 continue
             parts = line.split(RENAMES_ARROW, 1)
             bsl_name, companion = parts[0].strip(), parts[1].strip()
-            if companion.startswith(prefix_bin):
-                companion = companion[len(prefix_bin) :]
+            if companion.startswith(prefixbin):
+                companion = companion[len(prefixbin) :]
             tf.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
 
     merge_dir(temp_source_dir_path)
     temp_bsl_renames.unlink(missing_ok=True)
-    if temp_meta.exists() and not any(temp_meta.iterdir()):
-        temp_meta.rmdir()
+    if tempmeta.exists() and not any(tempmeta.iterdir()):
+        tempmeta.rmdir()
     return temp_source_dir_path

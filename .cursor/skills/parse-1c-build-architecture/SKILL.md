@@ -1,8 +1,8 @@
 ---
 name: parse-1c-build-architecture
 description: >-
-  Architecture of parse-1c-build: EPF/ERF unpack/pack pipeline (v8unpack, V8Reader, gcomp),
-  BSL extraction layout (managed UUID.0 vs module/text vs form), meta/bin structure,
+  Architecture of parse-1c-build: EPF/ERF/CF/CFE unpack/pack pipeline (v8unpack, V8Reader, gcomp),
+  BSL extraction layout (prefixes 0_/1_/2_/9_, objects/Class/Name for CF), meta/bin structure,
   and round-trip rebuild. Use when modifying Parser/Builder, extending BSL split/merge,
   debugging roundtrip mismatches, or working with the p1cb CLI.
 ---
@@ -12,7 +12,8 @@ description: >-
 ## Что делает проект
 
 **parse-1c-build** — Python-библиотека и CLI для **распаковки и сборки** 1C-артефактов:
-- `.epf`/`.erf` — через **v8unpack** (по умолчанию) или **V8Reader + 1C платформа**
+- `.epf`/`.erf` — через **v8unpack** (по умолчанию) или deprecated **V8Reader + 1C платформа**
+- `.cf`/`.cfe` — через **v8unpack** + раскладка `Класс/Объект/`
 - `.md`/`.ert` — через **GComp**
 
 Проект **не** парсит BSL в AST. Он оркестрирует внешние инструменты и добавляет слой **извлечения BSL** из артефактов v8unpack чтобы модули были редактируемы как `.bsl`-файлы со стабильной структурой `bin/ + meta/`.
@@ -27,11 +28,20 @@ description: >-
 
 | Файл | Роль |
 |------|------|
-| `base.py` | `Processor`: настройки из `settings.yaml`, пути к `v8unpack`/`gcomp`, флаг `use_reader` |
-| `parse.py` | `Parser`: распаковка EPF/ERF (v8unpack или V8Reader), опционально `bsl.split_dir` |
-| `build.py` | `Builder`: сборка EPF/ERF через `v8unpack -B` после подготовки дерева (BSL merge) |
-| `bsl.py` | **Центральный модуль:** split/merge BSL, `meta/` + `bin/` layout, `bsl_renames.txt` |
-| `process_utils.py` | `run_silent` / `check_silent` — subprocess-обёртки |
+| `base.py` | `Processor`: настройки, пути к `v8unpack`/`gcomp`, deprecated `use_reader` |
+| `parse.py` | `Parser`: распаковка EPF/ERF/CF/CFE/MD/ERT |
+| `build.py` | `Builder`: сборка через v8unpack/GComp |
+| `bsl.py` | split/merge BSL, префиксы `0_`/`1_`/`2_`/`9_`, `meta/` + `bin/` |
+| `cf_layout.py` | CF/CFE: нарезка dump → `Класс/Объект/`, корень конфигурации |
+| `metadata_types.py` | UUID типов метаданных → имена классов |
+| `process_utils.py` | `run_silent` / `check_silent` |
+
+## Префиксы BSL
+
+- `0_` — модули объекта/конфигурации (Объект, Менеджер, УправляемоеПриложение, …)
+- `1_` — все формы (общие и объектов)
+- `2_` — все команды (общие и объектов)
+- `9_` — общие модули (только корень CF)
 
 ## Пайплайн распаковки EPF/ERF
 
@@ -43,7 +53,18 @@ Parser.run(input.epf)
   → (если не --raw) bsl.split_dir(output_dir)
 ```
 
-**V8Reader-ветка:** пишет временный `.bat` (cp866), запускает 1cv8 с `/Execute V8Reader.epf` и командной строкой `decompile;pathToCF;...;pathOut;...;shutdown;convert-mxl2txt;`, удаляет bat после.
+**V8Reader-ветка (deprecated, только .epf/.erf):** пишет временный `.bat` (cp866), запускает 1cv8 с `/Execute V8Reader.epf`.
+
+## Пайплайн распаковки CF/CFE
+
+```
+Parser.run(input.cf)
+  → output dir = parent / "{stem}_cf_src"
+  → v8unpack -P
+  → (если не --raw) cf_layout.organize_configuration_dir
+       → objects/Catalogs|Documents|…/Name/{0_*.bsl,1_*.bsl,2_*.bsl,bin,meta}
+       → корень: 0_/1_/2_/9_*.bsl + bin/meta/objects
+```
 
 ## Типы форм и как извлекается BSL (`bsl.py`)
 
@@ -111,9 +132,10 @@ tests/
   test_build.py    # Roundtrip: parse → build → parse --raw, побайтовое сравнение
   test_bsl.py      # split_file / merge_file edge cases, split_dir/merge_dir, meta/ invariants
   test_base.py     # Processor / settings failures
-  data/
-    test.epf                  # фикстура для parse/build
-    test_epf_src/             # эталонное дерево для byte-for-byte сравнения
+  fixtures/                   # committed sample fixtures
+    test.epf
+    test_epf_src/
+  local-fixtures/             # gitignored local samples (e.g. CF/CFE)
 ```
 
 ## Практические заметки

@@ -1,6 +1,6 @@
 """Tests for parse_1c_build.bsl — BSL extraction / merge utilities.
 
-Tests use sample data from tests/data/test_epf_src/ as the reference layout:
+Tests use sample data from tests/fixtures/test_epf_src/ as the reference layout:
 - Managed form: single file UUID.0 with BSL embedded in tuple (e.g. faa87ad8-...0).
 - Object/form as directory: UUID.0/module (plain BSL), UUID.0/form (structure), etc.
 - File "text" — plain BSL; file "info" — tuple {3,1,0,"",0} (empty module).
@@ -23,7 +23,7 @@ from parse_1c_build.bsl import (
 
 # Path to reference EPF source (read-only samples).
 TESTS_DIR = Path(__file__).resolve().parent
-TEST_EPF_SRC = TESTS_DIR / "data" / "test_epf_src"
+TEST_EPF_SRC = TESTS_DIR / "fixtures" / "test_epf_src"
 
 
 def _read(path: Path, encoding: str = "utf-8-sig") -> str:

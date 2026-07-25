@@ -7,10 +7,12 @@ from cjk_commons.settings import get_path_attribute
 from commons_1c import platform_
 from loguru import logger
 
-from parse_1c_build import bsl
+from parse_1c_build import bsl, cf_layout
 from parse_1c_build.base import (
+    EXTENSIONS_CF_CFE,
     EXTENSIONS_EPF_ERF,
     EXTENSIONS_MD_ERT,
+    EXTENSIONS_V8UNPACK,
     Processor,
     add_generic_arguments,
 )
@@ -19,7 +21,8 @@ from parse_1c_build.process_utils import check_silent, run_silent
 logger.disable(__name__)
 
 ERR_CWD_INPUTS_NOT_FOUND = (
-    "Не найдено подходящих входных файлов (.epf, .erf, .md, .ert) в текущем каталоге "
+    "Не найдено подходящих входных файлов "
+    "(.epf, .erf, .cf, .cfe, .md, .ert) в текущем каталоге "
     "(и подкаталогах). Укажите файл или используйте -i"
 )
 ERR_INTERACTIVE_NOT_FOUND = (
@@ -36,7 +39,7 @@ def _default_output_dir(input_file_path: Path) -> Path:
 
 def _input_files_get() -> list[Path]:
     """Возвращает список входных файлов для интерактивного выбора."""
-    extensions = {*EXTENSIONS_EPF_ERF, *EXTENSIONS_MD_ERT}
+    extensions = {*EXTENSIONS_V8UNPACK, *EXTENSIONS_MD_ERT}
     file_paths = [
         file_path
         for file_path in Path.cwd().rglob("*")
@@ -114,9 +117,27 @@ class Parser(Processor):
     ) -> None:
         """Parse EPF/ERF: V8Reader (bat) or v8unpack -P, then optionally bsl.split_dir."""
         if self.use_reader:
+            self.warn_use_reader_deprecated(logger)
             self._run_v8reader(input_file_path, output_dir_path)
         else:
             self._run_v8unpack_parse(input_file_path, output_dir_path, raw)
+        logger.info(f"'{input_file_path}' parsed to '{output_dir_path}'")
+
+    def _run_cf_cfe(
+        self,
+        input_file_path: Path,
+        output_dir_path: Path,
+        raw: bool,
+    ) -> None:
+        """Parse CF/CFE via v8unpack -P; organize Class/Object layout unless raw."""
+        if self.use_reader:
+            self.warn_use_reader_deprecated(logger)
+            logger.warning(
+                "--use-reader is ignored for .cf/.cfe; using v8unpack"
+            )
+        self._run_v8unpack_parse(input_file_path, output_dir_path, raw=True)
+        if not raw:
+            cf_layout.organize_configuration_dir(output_dir_path)
         logger.info(f"'{input_file_path}' parsed to '{output_dir_path}'")
 
     def _run_v8reader(self, input_file_path: Path, output_dir_path: Path) -> None:
@@ -202,6 +223,8 @@ class Parser(Processor):
 
         if suffix in EXTENSIONS_EPF_ERF:
             self._run_epf_erf(input_file_path, output_dir_path, raw)
+        elif suffix in EXTENSIONS_CF_CFE:
+            self._run_cf_cfe(input_file_path, output_dir_path, raw)
         elif suffix in EXTENSIONS_MD_ERT:
             self._run_md_ert(input_file_path, output_dir_path)
         else:
@@ -230,6 +253,7 @@ def run(args) -> None:
     logger.enable("cjk_commons")
     logger.enable("commons_1c")
     logger.enable(Parser.__module__)
+    logger.enable(cf_layout.__name__)
     try:
         parser = Parser(**vars(args))
         output_dir_path = None if args.output is None else Path(args.output)
