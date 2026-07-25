@@ -52,12 +52,11 @@ _RE_MANAGED_FORM_FILE = re.compile(
 _RE_FORM_DESC_NAME = re.compile(r"\{1,0,[0-9a-fA-F-]{36}\},\s*\"([^\"]+)\"")
 
 BSL_RENAMES_FILENAME = "bsl_renames.txt"
-# Underscore prefix keeps these folders at the top of Explorer / sorted listings.
-BIN_DIRNAME = "_bin"
+BIN_DIRNAME = "bin"
 # Каталог со вспомогательными для сборки файлами (bsl_renames.txt, renames.txt)
-META_DIRNAME = "_meta"
+META_DIRNAME = "meta"
 # CF/CFE: Class/Name trees live under this folder (Catalogs, Documents, …).
-OBJECTS_DIRNAME = "_objects"
+OBJECTS_DIRNAME = "objects"
 # Разделитель в renames (как в renames.txt): "имя --> путь"
 RENAMES_ARROW = " --> "
 # Префиксы имён BSL: 0_ объект/менеджер/…, 1_ формы, 2_ команды, 9_ общие модули (корень CF)
@@ -180,7 +179,7 @@ _get_form_or_object_name = get_form_or_object_name
 
 
 def write_bsl_renames_file(root: Path, renames_entries: list[tuple[str, str]]) -> None:
-    """Public wrapper: write _meta/bsl_renames.txt."""
+    """Public wrapper: write meta/bsl_renames.txt."""
     _write_bsl_renames_file(root, renames_entries)
 
 
@@ -431,7 +430,7 @@ def merge_file(bsl_path: Path, base_path: Path | None = None) -> bool:
 
 
 def _read_existing_bsl_renames(root: Path) -> dict[str, str]:
-    """Read _meta/bsl_renames.txt or bsl_renames.txt; return companion -> bsl_name map."""
+    """Read meta/bsl_renames.txt or bsl_renames.txt; return companion -> bsl_name map."""
     result: dict[str, str] = {}
     for renames_path in (
         root / META_DIRNAME / BSL_RENAMES_FILENAME,
@@ -450,7 +449,7 @@ def _read_existing_bsl_renames(root: Path) -> dict[str, str]:
 
 
 def _write_bsl_renames_file(root: Path, renames_entries: list[tuple[str, str]]) -> None:
-    """Write _meta/bsl_renames.txt from (bsl_filename, companion_rel) list."""
+    """Write meta/bsl_renames.txt from (bsl_filename, companion_rel) list."""
     if not renames_entries:
         return
     meta_path = root / META_DIRNAME
@@ -479,7 +478,7 @@ def _move_to_bin_with_retry(p: Path, dest: Path, *, max_attempts: int = 5) -> No
 
 
 def _apply_bin_layout(root: Path) -> None:
-    """Move all non-BSL, non-_meta content under _bin/; write renames.txt; update bsl_renames with _bin/ prefix."""
+    """Move all non-BSL, non-meta content under bin/; write renames.txt; update bsl_renames with bin/ prefix."""
     bin_path = root / BIN_DIRNAME
     bin_path.mkdir(exist_ok=True)
     for p in list(root.iterdir()):
@@ -530,7 +529,7 @@ def split_dir(
     records the companion path for each .bsl file. If several modules share the
     same derived name, the later file in the walk overwrites the .bsl and
     bsl_renames keeps the last companion. If
-    *use_bin_layout* is True, all non-BSL files are moved under a ``_bin``
+    *use_bin_layout* is True, all non-BSL files are moved under a ``bin``
     subdir and renames.txt is written for build.
 
     Returns the number of files from which code was extracted.
@@ -549,7 +548,7 @@ def split_dir(
             continue
         if META_DIRNAME in item.parts or OBJECTS_DIRNAME in item.parts:
             continue
-        # Skip files under _bin/ when using bin layout: they are from a previous run (with placeholder)
+        # Skip files under bin/ when using bin layout: they are from a previous run (with placeholder)
         if use_bin_layout and BIN_DIRNAME in item.parts:
             continue
         bsl_dest_path: Path | None = None
@@ -560,13 +559,13 @@ def split_dir(
             except ValueError:
                 rel = item
             companion = str(rel).replace("\\", "/")
-            companion_after_bin = (
+            companion_afterbin = (
                 f"{BIN_DIRNAME}/{companion}" if use_bin_layout else companion
             )
 
             def _choose_bsl_name(base_name: str) -> str:
                 existing = existing_companion_to_bsl.get(
-                    companion_after_bin
+                    companion_afterbin
                 ) or existing_companion_to_bsl.get(companion)
                 return existing if existing else f"{base_name}.bsl"
 
@@ -643,7 +642,7 @@ def merge_dir(dir_path: Path) -> int:
 
 
 def has_bin_layout(dir_path: Path) -> bool:
-    """True if *dir_path* has _meta/renames.txt, _meta/bsl_renames.txt and _bin/."""
+    """True if *dir_path* has meta/renames.txt, meta/bsl_renames.txt and bin/."""
     meta = dir_path / META_DIRNAME
     return (
         (meta / "renames.txt").exists()
@@ -653,18 +652,18 @@ def has_bin_layout(dir_path: Path) -> bool:
 
 
 def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
-    """Подготовить во временном каталоге дерево для v8unpack -B из раскладки _bin + _meta.
+    """Подготовить во временном каталоге дерево для v8unpack -B из раскладки bin + meta.
 
-    Копирует содержимое _bin по _meta/renames.txt, копирует .bsl, записывает
-    bsl_renames (без префикса _bin/), вызывает merge_dir, удаляет bsl_renames из temp.
+    Копирует содержимое bin по meta/renames.txt, копирует .bsl, записывает
+    bsl_renames (без префикса bin/), вызывает merge_dir, удаляет bsl_renames из temp.
     Возвращает путь к подготовленному каталогу (temp_parent / input_dir_path.name).
     """
     temp_source_dir_path = temp_parent / input_dir_path.name
-    temp_source_dir_path.mkdir(parents=True)
+    temp_source_dir_path.mkdir(parents=True, exist_ok=True)
     meta_dir = input_dir_path / META_DIRNAME
     renames_path = meta_dir / "renames.txt"
     bsl_renames_path = meta_dir / BSL_RENAMES_FILENAME
-    prefix_bin = BIN_DIRNAME + "/"
+    prefixbin = BIN_DIRNAME + "/"
 
     with renames_path.open(encoding="utf-8-sig") as f:
         for line in f:
@@ -685,9 +684,9 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
     for bsl_file in input_dir_path.glob("*.bsl"):
         shutil.copy2(bsl_file, temp_source_dir_path / bsl_file.name)
 
-    temp_meta = temp_source_dir_path / META_DIRNAME
-    temp_meta.mkdir(parents=True, exist_ok=True)
-    temp_bsl_renames = temp_meta / BSL_RENAMES_FILENAME
+    tempmeta = temp_source_dir_path / META_DIRNAME
+    tempmeta.mkdir(parents=True, exist_ok=True)
+    temp_bsl_renames = tempmeta / BSL_RENAMES_FILENAME
     with bsl_renames_path.open(encoding="utf-8") as rf:
         lines = rf.readlines()
     with temp_bsl_renames.open("w", encoding="utf-8") as tf:
@@ -697,12 +696,12 @@ def prepare_temp_for_build(input_dir_path: Path, temp_parent: Path) -> Path:
                 continue
             parts = line.split(RENAMES_ARROW, 1)
             bsl_name, companion = parts[0].strip(), parts[1].strip()
-            if companion.startswith(prefix_bin):
-                companion = companion[len(prefix_bin) :]
+            if companion.startswith(prefixbin):
+                companion = companion[len(prefixbin) :]
             tf.write(f"{bsl_name}{RENAMES_ARROW}{companion}\n")
 
     merge_dir(temp_source_dir_path)
     temp_bsl_renames.unlink(missing_ok=True)
-    if temp_meta.exists() and not any(temp_meta.iterdir()):
-        temp_meta.rmdir()
+    if tempmeta.exists() and not any(tempmeta.iterdir()):
+        tempmeta.rmdir()
     return temp_source_dir_path

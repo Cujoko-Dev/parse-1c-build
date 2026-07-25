@@ -36,7 +36,7 @@ _RE_CONFIG_IDENTITY = re.compile(
     r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"'
 )
 
-CF_OBJECTS_FILENAME = "cf_objects.txt"
+CF_OBJECTS_FILENAME = "cfobjects.txt"
 ROOT_MARKER_FILES = frozenset({"root", "version", "versions"})
 
 
@@ -151,7 +151,7 @@ def _parse_collections(config_text: str) -> list[tuple[str, list[str]]]:
     return result
 
 
-def _discover_objects(
+def _discoverobjects(
     dump_dir: Path, index: DumpIndex
 ) -> tuple[str, str, list[MetaObject]]:
     config_uuid = _config_uuid_from_root(dump_dir)
@@ -235,7 +235,7 @@ def _extract_root_prefixed_object(
     root: Path,
     renames: list[tuple[str, str]],
 ) -> None:
-    """Place dump files into root _bin/ and extract BSL with root_prefix."""
+    """Place dump files into root bin/ and extract BSL with root_prefix."""
     assert obj.root_prefix is not None
     bin_dir = root / bsl.BIN_DIRNAME
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -276,7 +276,7 @@ def _extract_root_prefixed_object(
 
 
 def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
-    """Extract modules inside an object mini-layout (_bin already filled)."""
+    """Extract modules inside an object mini-layout (bin already filled)."""
     bin_dir = object_dir / bsl.BIN_DIRNAME
     if not bin_dir.is_dir():
         return
@@ -430,18 +430,18 @@ def _extract_config_modules(
 
 
 def organize_configuration_dir(dump_dir: Path) -> None:
-    """Transform flat v8unpack CF dump into _objects/Class/Name + root BSL layout."""
+    """Transform flat v8unpack CF dump into objects/Class/Name + root BSL layout."""
     dump_dir = dump_dir.resolve()
     index = DumpIndex.build(dump_dir)
-    _config_uuid, config_text, objects = _discover_objects(dump_dir, index)
+    _config_uuid, config_text, objects = _discoverobjects(dump_dir, index)
     logger.info(f"CF layout: {len(objects)} metadata object(s) in '{dump_dir}'")
 
     # In-place: keep moves on the same volume (rename), no staging copy.
-    root_bin = dump_dir / bsl.BIN_DIRNAME
-    root_meta = dump_dir / bsl.META_DIRNAME
+    rootbin = dump_dir / bsl.BIN_DIRNAME
+    rootmeta = dump_dir / bsl.META_DIRNAME
     objects_root = dump_dir / bsl.OBJECTS_DIRNAME
-    root_bin.mkdir(parents=True, exist_ok=True)
-    root_meta.mkdir(parents=True, exist_ok=True)
+    rootbin.mkdir(parents=True, exist_ok=True)
+    rootmeta.mkdir(parents=True, exist_ok=True)
     objects_root.mkdir(parents=True, exist_ok=True)
     index.forget(bsl.BIN_DIRNAME)
     index.forget(bsl.META_DIRNAME)
@@ -463,11 +463,11 @@ def organize_configuration_dir(dump_dir: Path) -> None:
         if obj.root_prefix is not None:
             continue
         obj_dir = objects_root / obj.class_folder / obj.name
-        obj_bin = obj_dir / bsl.BIN_DIRNAME
-        obj_bin.mkdir(parents=True, exist_ok=True)
+        objbin = obj_dir / bsl.BIN_DIRNAME
+        objbin.mkdir(parents=True, exist_ok=True)
         for stem in sorted(obj.related_stems):
             for src in index.take_stem_paths(stem):
-                _safe_move(src, obj_bin / src.name, ensure_parent=False)
+                _safe_move(src, objbin / src.name, ensure_parent=False)
         extract_jobs.append((obj_dir, obj.object_uuid))
         objects_index.append((obj.rel_dir, obj.object_uuid))
 
@@ -485,15 +485,15 @@ def organize_configuration_dir(dump_dir: Path) -> None:
         name = item.name
         if name in (bsl.BIN_DIRNAME, bsl.META_DIRNAME, bsl.OBJECTS_DIRNAME):
             continue
-        dest = root_bin / name
+        dest = rootbin / name
         _safe_move(item, dest, ensure_parent=False)
         index.forget(name)
         root_renames.append((name, f"{bsl.BIN_DIRNAME}/{name}"))
 
-    with (root_meta / CF_OBJECTS_FILENAME).open("w", encoding="utf-8") as f:
+    with (rootmeta / CF_OBJECTS_FILENAME).open("w", encoding="utf-8") as f:
         for rel, uuid in sorted(objects_index, key=lambda x: x[0]):
             f.write(f"{rel}{bsl.RENAMES_ARROW}{uuid}\n")
-    with (root_meta / "renames.txt").open("w", encoding="utf-8") as f:
+    with (rootmeta / "renames.txt").open("w", encoding="utf-8") as f:
         for target, source in sorted(set(root_renames), key=lambda x: x[0]):
             if target.endswith(".bsl"):
                 continue
@@ -541,8 +541,10 @@ def prepare_configuration_for_build(input_dir: Path, temp_parent: Path) -> Path:
             if not obj_dir.is_dir():
                 continue
             if bsl.has_bin_layout(obj_dir):
+                # Unique temp dir per Class/Name (object names can collide across classes).
+                safe_key = rel.replace("\\", "/").replace("/", "__")
                 prepared = bsl.prepare_temp_for_build(
-                    obj_dir, temp_parent / f"obj_{obj_dir.name}"
+                    obj_dir, temp_parent / f"obj_{safe_key}"
                 )
                 _copy_tree_entries(prepared, temp_dump)
             else:

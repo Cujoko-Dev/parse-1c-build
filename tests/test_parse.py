@@ -19,5 +19,5 @@ def test_parse(test, tmpdir):
 
     parse_run(args)
 
-    # With named BSL + _bin layout, unpacked structure is under _bin/
-    assert (temp_dir_path / "_bin" / "root").exists()
+    # With named BSL + bin layout, unpacked structure is under bin/
+    assert (temp_dir_path / "bin" / "root").exists()

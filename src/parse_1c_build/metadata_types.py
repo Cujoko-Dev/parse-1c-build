@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-# type UUID (lowercase) -> (folder name under _objects/, root_bsl_prefix or None)
+# type UUID (lowercase) -> (folder name under objects/, root_bsl_prefix or None)
 # root_bsl_prefix: if set, object modules go to CF root with that prefix (not Class/Name/).
-# None means object mini-layout under _objects/Class/Name/.
+# None means object mini-layout under objects/Class/Name/.
 # Class folder names match 1C English metadata names (EDT / built-in language).
 
 METADATA_TYPES: dict[str, tuple[str, str | None]] = {
@@ -12,7 +12,7 @@ METADATA_TYPES: dict[str, tuple[str, str | None]] = {
     "0fe48980-252d-11d6-a3c7-0050bae0a776": ("CommonModules", "9_"),
     "07ee8426-87f1-11d5-b99c-0050bae0a95d": ("CommonForms", "1_"),
     "2f1a5187-fb0e-4b05-9489-dc5dd6412348": ("CommonCommands", "2_"),
-    # Objects with Class/Name layout under _objects/
+    # Objects with Class/Name layout under objects/
     "cf4abea6-37b2-11d4-940f-008048da11f9": ("Catalogs", None),
     "061d872a-5787-460e-95ac-ed74ea3a3e84": ("Documents", None),
     "0195e80c-b157-11d4-9435-004095e12fc7": ("Constants", None),
