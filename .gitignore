@@ -1,3 +1,7 @@
+/.artifacts/
+/.notes/
+/.temp/
+
 # Python local artifacts
 __pycache__/
 *.py[cod]
