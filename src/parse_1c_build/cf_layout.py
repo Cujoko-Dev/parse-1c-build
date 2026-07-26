@@ -220,7 +220,14 @@ def _extract_plain_module(module_path: Path, dest_bsl: Path) -> bool:
         body = raw[3:]
     else:
         body = raw
-    if body.decode("utf-8-sig").strip() == "":
+    try:
+        decoded = body.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        # A password-protected common module stores compiled/encrypted payload
+        # in this slot.  It must remain byte-for-byte in bin/ and must not stop
+        # organization of the rest of a CF/CFE dump.
+        return False
+    if decoded.strip() == "":
         dest_bsl.write_bytes(b"")
         module_path.write_bytes("\r\n".encode("utf-8"))
         return True
