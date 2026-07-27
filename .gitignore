@@ -1,5 +1,6 @@
+# Project local artifacts
 /.artifacts/
-/.notes/
+/.notes
 /.temp/
 
 # Python local artifacts
