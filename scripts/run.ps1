@@ -86,6 +86,9 @@ function New-ChildScriptFile {
     $childScript = @"
 `$ErrorActionPreference = 'Stop'
 $ScriptContent
+if (`$null -ne `$LASTEXITCODE -and `$LASTEXITCODE -ne 0) {
+    exit [int]`$LASTEXITCODE
+}
 "@
 
     Set-Content -LiteralPath $tempScriptPath -Value $childScript -Encoding UTF8
