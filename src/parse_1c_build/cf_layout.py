@@ -294,6 +294,15 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
     handled_texts: set[Path] = set()
     texts: list[Path] = []
     form_items: list[Path] = []
+    nested_names: dict[str, str] = {}
+
+    object_descriptor = bin_dir / object_uuid
+    if object_descriptor.is_file():
+        descriptor_text = _read_text(object_descriptor)
+        nested_names = {
+            match.group(1).lower(): match.group(2)
+            for match in _RE_OBJECT_NAME.finditer(descriptor_text)
+        }
 
     # One walk: collect files, build renames.txt entries, classify candidates.
     for dirpath, _dirnames, filenames in os.walk(bin_dir):
@@ -362,13 +371,13 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             continue
         if not is_command:
             continue
-        cmd_name = stem
+        cmd_name = nested_names.get(stem.lower(), stem)
         desc = bin_dir / stem
         if desc.is_file():
             m = _RE_OBJECT_NAME.search(_read_text(desc))
             if m:
                 cmd_name = m.group(2)
-        else:
+        elif cmd_name == stem:
             cmd_name = stem.split("-")[0]
         bsl_name = f"{bsl.BSL_PREFIX_COMMAND}{cmd_name}.bsl"
         if (object_dir / bsl_name).exists():

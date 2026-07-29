@@ -3,7 +3,10 @@ from pathlib import Path
 import pytest
 
 from parse_1c_build.cli import get_argparser
-from parse_1c_build.cf_layout import _extract_plain_module
+from parse_1c_build.cf_layout import (
+    _extract_object_modules,
+    _extract_plain_module,
+)
 from parse_1c_build.parse import run as parse_run
 
 
@@ -33,3 +36,32 @@ def test_extract_plain_module_keeps_password_protected_payload(tmp_path: Path) -
     assert _extract_plain_module(module_path, bsl_path) is False
     assert module_path.read_bytes() == protected_payload
     assert not bsl_path.exists()
+
+
+def test_object_command_uses_name_from_object_descriptor(tmp_path: Path) -> None:
+    object_uuid = "92876c9e-52ff-480d-9878-5766f4f9d12c"
+    command_uuid = "38d92d75-c8b8-42d6-9e0a-6dc0811a8652"
+    bin_dir = tmp_path / "bin"
+    command_dir = bin_dir / f"{command_uuid}.2"
+    command_dir.mkdir(parents=True)
+    (bin_dir / object_uuid).write_text(
+        f'{{0,0,{object_uuid}}},"Object",'
+        f'{{0,0,{command_uuid}}},"ВнешнийДоступ"',
+        encoding="utf-8",
+    )
+    (command_dir / "text").write_text(
+        "Процедура ОбработкаКоманды(ПараметрКоманды, ПараметрыВыполнения)\n"
+        "КонецПроцедуры",
+        encoding="utf-8",
+    )
+
+    _extract_object_modules(tmp_path, object_uuid)
+
+    assert (tmp_path / "2_ВнешнийДоступ.bsl").is_file()
+    assert not (tmp_path / "2_38d92d75.bsl").exists()
+    assert (
+        tmp_path / "meta" / "bsl_renames.txt"
+    ).read_text(encoding="utf-8") == (
+        "2_ВнешнийДоступ.bsl --> "
+        f"bin/{command_uuid}.2/text\n"
+    )
