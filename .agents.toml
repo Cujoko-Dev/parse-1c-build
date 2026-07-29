@@ -1,6 +1,6 @@
 # Additional workspace directories for codex2 and agent2.
 # Local editable dependencies declared in .dev/pyproject.toml.
-# Paths are relative to this file's directory.
+# Paths may be absolute or relative to this file's directory.
 add_dirs = [
     '../commons',
     '../commons-1c',
