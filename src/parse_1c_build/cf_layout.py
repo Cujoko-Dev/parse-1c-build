@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -445,11 +446,26 @@ def _extract_config_modules(
             )
 
 
-def organize_configuration_dir(dump_dir: Path) -> None:
-    """Transform flat v8unpack CF dump into objects/Class/Name + root BSL layout."""
+def organize_configuration_dir(
+    dump_dir: Path,
+    timings: dict[str, float] | None = None,
+) -> None:
+    """Transform flat v8unpack CF dump into objects/Class/Name + root BSL layout.
+
+    If *timings* is provided, phase durations (seconds) are accumulated into it:
+    ``index_discover``, ``root_modules``, ``move_objects``, ``extract_modules``,
+    ``remaining_and_meta``.
+    """
+
+    def _phase(name: str, started: float) -> None:
+        if timings is not None:
+            timings[name] = timings.get(name, 0.0) + (time.perf_counter() - started)
+
     dump_dir = dump_dir.resolve()
+    t0 = time.perf_counter()
     index = DumpIndex.build(dump_dir)
     _config_uuid, config_text, objects = _discoverobjects(dump_dir, index)
+    _phase("index_discover", t0)
     logger.info(f"CF layout: {len(objects)} metadata object(s) in '{dump_dir}'")
 
     # In-place: keep moves on the same volume (rename), no staging copy.
@@ -466,6 +482,7 @@ def organize_configuration_dir(dump_dir: Path) -> None:
     root_renames: list[tuple[str, str]] = []
     objects_index: list[tuple[str, str]] = []
 
+    t0 = time.perf_counter()
     for obj in objects:
         if obj.root_prefix is None:
             continue
@@ -473,8 +490,10 @@ def organize_configuration_dir(dump_dir: Path) -> None:
         objects_index.append((f"@{obj.root_prefix}{obj.name}", obj.object_uuid))
 
     _extract_config_modules(index, config_text, dump_dir, root_renames)
+    _phase("root_modules", t0)
 
     extract_jobs: list[tuple[Path, str]] = []
+    t0 = time.perf_counter()
     for obj in objects:
         if obj.root_prefix is not None:
             continue
@@ -486,7 +505,9 @@ def organize_configuration_dir(dump_dir: Path) -> None:
                 _safe_move(src, objbin / src.name, ensure_parent=False)
         extract_jobs.append((obj_dir, obj.object_uuid))
         objects_index.append((obj.rel_dir, obj.object_uuid))
+    _phase("move_objects", t0)
 
+    t0 = time.perf_counter()
     if extract_jobs:
         workers = min(32, max(4, (os.cpu_count() or 4) * 2))
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -496,7 +517,9 @@ def organize_configuration_dir(dump_dir: Path) -> None:
             ]
             for fut in as_completed(futures):
                 fut.result()
+    _phase("extract_modules", t0)
 
+    t0 = time.perf_counter()
     for item in index.remaining_paths():
         name = item.name
         if name in (bsl.BIN_DIRNAME, bsl.META_DIRNAME, bsl.OBJECTS_DIRNAME):
@@ -517,6 +540,7 @@ def organize_configuration_dir(dump_dir: Path) -> None:
     bsl_root_entries = [(t, s) for t, s in root_renames if t.endswith(".bsl")]
     if bsl_root_entries:
         bsl.write_bsl_renames_file(dump_dir, sorted(set(bsl_root_entries)))
+    _phase("remaining_and_meta", t0)
 
     logger.info(f"CF layout organized in '{dump_dir}'")
 
