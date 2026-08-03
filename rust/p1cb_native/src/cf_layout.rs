@@ -439,7 +439,12 @@ fn extract_object_modules(object_dir: &Path, object_uuid: &str) -> Result<(), St
             .unwrap_or("");
         if filename == "text" {
             texts.push(path.clone());
-        } else if is_managed_form_file(path) {
+        } else if is_managed_form_file(path)
+            && filename
+                .strip_suffix(".0")
+                .map(|stem| !stem.eq_ignore_ascii_case(object_uuid))
+                .unwrap_or(false)
+        {
             form_items.push(path.clone());
         } else if filename == "module" && parent_name.ends_with(".0") {
             form_items.push(path.clone());
@@ -592,13 +597,25 @@ fn extract_object_modules(object_dir: &Path, object_uuid: &str) -> Result<(), St
                 }
             }
         }
-        if let Some(ref form_bsl) = form_bsl_name {
-            let dest = object_dir.join(form_bsl);
+        if let Some(mut form_bsl) = form_bsl_name {
+            let mut dest = object_dir.join(&form_bsl);
+            if dest.exists() {
+                let internal_name = if is_managed_form_file(item) {
+                    filename
+                } else {
+                    item.parent()
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                };
+                let internal_stem = internal_name.strip_suffix(".0").unwrap_or(internal_name);
+                let short = &internal_stem[..internal_stem.len().min(8)];
+                let base = form_bsl.strip_suffix(".bsl").unwrap_or(&form_bsl);
+                form_bsl = format!("{}_{}.bsl", base, short);
+                dest = object_dir.join(&form_bsl);
+            }
             if split_file(item, Some(&dest)).map_err(|e| e.to_string())? {
-                bsl_renames.push((
-                    form_bsl.clone(),
-                    format!("{}/{}", BIN_DIRNAME, companion),
-                ));
+                bsl_renames.push((form_bsl, format!("{}/{}", BIN_DIRNAME, companion)));
             }
         }
     }

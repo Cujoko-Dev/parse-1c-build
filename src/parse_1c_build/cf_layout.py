@@ -302,6 +302,7 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
     texts: list[Path] = []
     form_items: list[Path] = []
     nested_names: dict[str, str] = {}
+    object_uuid_l = object_uuid.lower()
 
     object_descriptor = bin_dir / object_uuid
     if object_descriptor.is_file():
@@ -320,7 +321,10 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             renames_txt.append(f"{rel}{bsl.RENAMES_ARROW}{bsl.BIN_DIRNAME}/{rel}\n")
             if filename == "text":
                 texts.append(path)
-            elif bsl.is_managed_form_file(path):
+            elif (
+                bsl.is_managed_form_file(path)
+                and path.name.removesuffix(".0").lower() != object_uuid_l
+            ):
                 form_items.append(path)
             elif filename == "module" and base.name.endswith(".0"):
                 form_items.append(path)
@@ -344,7 +348,6 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
         bsl_renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{rel}"))
         handled_texts.add(text_path)
 
-    object_uuid_l = object_uuid.lower()
     _add_plain(
         bin_dir / f"{object_uuid}.0" / "text",
         f"{bsl.BSL_PREFIX_OBJECT}Объект.bsl",
@@ -397,6 +400,14 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             form_name = bsl.get_form_or_object_name(bin_dir, item.parent.name)
             if form_name:
                 form_bsl_name = f"{bsl.BSL_PREFIX_FORM}{form_name}.bsl"
+        if form_bsl_name and (object_dir / form_bsl_name).exists():
+            internal_name = (
+                item.name if bsl.is_managed_form_file(item) else item.parent.name
+            )
+            internal_stem = internal_name.removesuffix(".0")
+            form_bsl_name = (
+                f"{Path(form_bsl_name).stem}_{internal_stem[:8]}.bsl"
+            )
         if form_bsl_name and bsl.split_file(item, object_dir / form_bsl_name):
             bsl_renames.append((form_bsl_name, f"{bsl.BIN_DIRNAME}/{companion}"))
 
@@ -576,6 +587,15 @@ def _copy_tree_entries(src_dir: Path, dest_dir: Path) -> None:
             shutil.copy2(item, dest)
 
 
+def _move_tree_entries(src_dir: Path, dest_dir: Path) -> None:
+    """Move prepared temp entries into the flat dump without copying again."""
+    for item in src_dir.iterdir():
+        dest = dest_dir / item.name
+        if dest.exists():
+            continue
+        item.replace(dest)
+
+
 def prepare_configuration_for_build(input_dir: Path, temp_parent: Path) -> Path:
     """Flatten organized CF layout to a temp dump directory for v8unpack -B."""
     input_dir = input_dir.resolve()
@@ -583,6 +603,7 @@ def prepare_configuration_for_build(input_dir: Path, temp_parent: Path) -> Path:
     temp_dump.mkdir(parents=True, exist_ok=True)
 
     objects_path = input_dir / bsl.META_DIRNAME / CF_OBJECTS_FILENAME
+    object_actions: list[tuple[str, str, Path]] = []
     with objects_path.open(encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
@@ -595,16 +616,36 @@ def prepare_configuration_for_build(input_dir: Path, temp_parent: Path) -> Path:
             if not obj_dir.is_dir():
                 continue
             if bsl.has_bin_layout(obj_dir):
-                # Unique temp dir per Class/Name (object names can collide across classes).
                 safe_key = rel.replace("\\", "/").replace("/", "__")
-                prepared = bsl.prepare_temp_for_build(
-                    obj_dir, temp_parent / f"obj_{safe_key}"
-                )
-                _copy_tree_entries(prepared, temp_dump)
+                object_actions.append(("prepare", safe_key, obj_dir))
             else:
                 bin_dir = obj_dir / bsl.BIN_DIRNAME
                 if bin_dir.is_dir():
-                    _copy_tree_entries(bin_dir, temp_dump)
+                    object_actions.append(("copy", rel, bin_dir))
+
+    prepare_actions = [action for action in object_actions if action[0] == "prepare"]
+    workers = min(4, len(prepare_actions))
+    prepared_by_key: dict[str, Path] = {}
+    if workers:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                key: pool.submit(
+                    bsl.prepare_temp_for_build,
+                    obj_dir,
+                    temp_parent / f"obj_{key}",
+                )
+                for _kind, key, obj_dir in prepare_actions
+            }
+            for kind, key, _path in object_actions:
+                if kind == "prepare":
+                    prepared_by_key[key] = futures[key].result()
+
+    # Preserve cfobjects.txt order when duplicate flat-dump entries exist.
+    for kind, key, path in object_actions:
+        if kind == "prepare":
+            _move_tree_entries(prepared_by_key[key], temp_dump)
+        else:
+            _copy_tree_entries(path, temp_dump)
 
     if (input_dir / bsl.META_DIRNAME / bsl.BSL_RENAMES_FILENAME).is_file() and (
         input_dir / bsl.BIN_DIRNAME
@@ -613,7 +654,7 @@ def prepare_configuration_for_build(input_dir: Path, temp_parent: Path) -> Path:
             prepared_root = bsl.prepare_temp_for_build(
                 input_dir, temp_parent / "cf_root"
             )
-            _copy_tree_entries(prepared_root, temp_dump)
+            _move_tree_entries(prepared_root, temp_dump)
         else:
             bsl.merge_dir(input_dir)
             _copy_tree_entries(input_dir / bsl.BIN_DIRNAME, temp_dump)
