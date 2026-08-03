@@ -21,6 +21,18 @@ from parse_1c_build.metadata_types import (
 
 logger.disable(__name__)
 
+_FORCE_PYTHON = os.environ.get("P1CB_RUST_FORCE_PYTHON", "").strip().casefold() in (
+    "1",
+    "true",
+    "yes",
+)
+try:
+    from p1cb_native import (
+        organize_configuration_dir as _rust_organize_configuration_dir,  # type: ignore[import-not-found]
+    )
+except ImportError:
+    _rust_organize_configuration_dir = None
+
 _RE_UUID = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 )
@@ -30,12 +42,8 @@ _RE_COLLECTION = re.compile(
     r"),(\d+)((?:,[0-9a-fA-F-]{36})*)\}"
 )
 # Metadata identity: older dumps use {0,0,uuid},"Name"; newer (e.g. Retail) use {1,0,...}.
-_RE_OBJECT_NAME = re.compile(
-    r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"'
-)
-_RE_CONFIG_IDENTITY = re.compile(
-    r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"'
-)
+_RE_OBJECT_NAME = re.compile(r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"')
+_RE_CONFIG_IDENTITY = re.compile(r'\{[01],0,([0-9a-fA-F-]{36})\},"([^"]+)"')
 
 CF_OBJECTS_FILENAME = "cfobjects.txt"
 ROOT_MARKER_FILES = frozenset({"root", "version", "versions"})
@@ -278,9 +286,7 @@ def _extract_root_prefixed_object(
             )
     elif form_path.is_file() and not form_path.is_dir():
         if bsl.split_file(form_path, bsl_path):
-            renames.append(
-                (bsl_name, f"{bsl.BIN_DIRNAME}/{obj.object_uuid}.0")
-            )
+            renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{obj.object_uuid}.0"))
 
 
 def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
@@ -311,9 +317,7 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
         for filename in filenames:
             path = base / filename
             rel = path.relative_to(bin_dir).as_posix()
-            renames_txt.append(
-                f"{rel}{bsl.RENAMES_ARROW}{bsl.BIN_DIRNAME}/{rel}\n"
-            )
+            renames_txt.append(f"{rel}{bsl.RENAMES_ARROW}{bsl.BIN_DIRNAME}/{rel}\n")
             if filename == "text":
                 texts.append(path)
             elif bsl.is_managed_form_file(path):
@@ -321,9 +325,7 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             elif filename == "module" and base.name.endswith(".0"):
                 form_items.append(path)
 
-    def _add_plain(
-        text_path: Path, bsl_name: str, *, raw: bytes | None = None
-    ) -> None:
+    def _add_plain(text_path: Path, bsl_name: str, *, raw: bytes | None = None) -> None:
         if text_path in handled_texts:
             return
         if raw is None:
@@ -337,9 +339,7 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
         if dest.exists():
             return
         dest.write_bytes(body)
-        text_path.write_bytes(
-            b"\xef\xbb\xbf" + bsl.BSL_PLACEHOLDER.encode("utf-8")
-        )
+        text_path.write_bytes(b"\xef\xbb\xbf" + bsl.BSL_PLACEHOLDER.encode("utf-8"))
         rel = text_path.relative_to(bin_dir).as_posix()
         bsl_renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{rel}"))
         handled_texts.add(text_path)
@@ -398,9 +398,7 @@ def _extract_object_modules(object_dir: Path, object_uuid: str) -> None:
             if form_name:
                 form_bsl_name = f"{bsl.BSL_PREFIX_FORM}{form_name}.bsl"
         if form_bsl_name and bsl.split_file(item, object_dir / form_bsl_name):
-            bsl_renames.append(
-                (form_bsl_name, f"{bsl.BIN_DIRNAME}/{companion}")
-            )
+            bsl_renames.append((form_bsl_name, f"{bsl.BIN_DIRNAME}/{companion}"))
 
     with (meta_dir / "renames.txt").open("w", encoding="utf-8") as f:
         f.writelines(sorted(renames_txt))
@@ -441,9 +439,7 @@ def _extract_config_modules(
             continue
         bsl_name = f"{bsl.BSL_PREFIX_OBJECT}{role}.bsl"
         if _extract_plain_module(text_path, root / bsl_name):
-            renames.append(
-                (bsl_name, f"{bsl.BIN_DIRNAME}/{identity}.{slot}/text")
-            )
+            renames.append((bsl_name, f"{bsl.BIN_DIRNAME}/{identity}.{slot}/text"))
 
 
 def organize_configuration_dir(
@@ -455,7 +451,25 @@ def organize_configuration_dir(
     If *timings* is provided, phase durations (seconds) are accumulated into it:
     ``index_discover``, ``root_modules``, ``move_objects``, ``extract_modules``,
     ``remaining_and_meta``.
+
+    Uses optional Rust acceleration (``p1cb_native``) unless
+    ``P1CB_RUST_FORCE_PYTHON`` is set.
     """
+    dump_dir = Path(dump_dir).resolve()
+    if not _FORCE_PYTHON and _rust_organize_configuration_dir is not None:
+        rust_timings = _rust_organize_configuration_dir(str(dump_dir))
+        if timings is not None and isinstance(rust_timings, dict):
+            for name, seconds in rust_timings.items():
+                timings[name] = timings.get(name, 0.0) + float(seconds)
+        return
+    _organize_configuration_dir_python(dump_dir, timings=timings)
+
+
+def _organize_configuration_dir_python(
+    dump_dir: Path,
+    timings: dict[str, float] | None = None,
+) -> None:
+    """Pure-Python implementation of :func:`organize_configuration_dir`."""
 
     def _phase(name: str, started: float) -> None:
         if timings is not None:

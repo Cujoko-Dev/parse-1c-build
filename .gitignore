@@ -47,3 +47,6 @@ Thumbs.db
 # Local test fixtures (machine-specific; not committed)
 tests/local-fixtures/*
 !tests/local-fixtures/.gitkeep
+
+# Rust / maturin
+rust/**/target/

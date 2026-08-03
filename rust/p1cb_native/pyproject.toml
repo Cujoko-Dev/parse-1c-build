@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "p1cb-native"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Optional Rust/PyO3 acceleration for parse-1c-build CF layout"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "p1cb_native"

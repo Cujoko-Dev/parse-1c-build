@@ -5,6 +5,7 @@ requires = ["pdm-backend"]
 [dependency-groups]
 dev = [
     "debugpy>=1.8.2",
+    "maturin<2.0,>=1.7",
     "pyinstaller>=6.0.0",
     "pytest>=9.0.2",
 ]
@@ -49,6 +50,7 @@ dev = [
 ]
 
 [tool.pdm.scripts]
+build-native-rust = { cmd = "maturin develop --release --uv --manifest-path ../rust/p1cb_native/Cargo.toml", working_dir = "." }
 test = { cmd = "pytest", working_dir = ".." }
 
 [tool.pdm.version]
