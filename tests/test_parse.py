@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from parse_1c_build import parse
 from parse_1c_build.cli import get_argparser
 from parse_1c_build.cf_layout import (
     _extract_object_modules,
@@ -65,3 +66,32 @@ def test_object_command_uses_name_from_object_descriptor(tmp_path: Path) -> None
         "2_ВнешнийДоступ.bsl --> "
         f"bin/{command_uuid}.2/text\n"
     )
+
+
+def test_parser_logs_start_before_dispatch(tmp_path: Path, monkeypatch) -> None:
+    input_file = tmp_path / "configuration.cf"
+    output_dir = tmp_path / "configuration_cf_src"
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    monkeypatch.setattr(
+        parse.logger,
+        "info",
+        lambda message, *args: calls.append((message, args)),
+    )
+    monkeypatch.setattr(
+        parse.Parser,
+        "_run_cf_cfe",
+        lambda self, input_path, output_path, raw: calls.append(
+            ("dispatch", (input_path, output_path, raw))
+        ),
+    )
+
+    parser = object.__new__(parse.Parser)
+    parser.run(input_file, output_dir, raw=False)
+
+    assert calls == [
+        (
+            "Начинаю разбор контейнера '{}' в '{}'",
+            (input_file, output_dir),
+        ),
+        ("dispatch", (input_file, output_dir, False)),
+    ]

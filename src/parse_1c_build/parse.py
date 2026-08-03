@@ -220,6 +220,11 @@ class Parser(Processor):
         if output_dir_path is None:
             output_dir_path = _default_output_dir(input_file_path)
         _prepare_output_dir(output_dir_path)
+        logger.info(
+            "Начинаю разбор контейнера '{}' в '{}'",
+            input_file_path,
+            output_dir_path,
+        )
 
         if suffix in EXTENSIONS_EPF_ERF:
             self._run_epf_erf(input_file_path, output_dir_path, raw)

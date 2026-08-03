@@ -201,3 +201,32 @@ def test_backup_existing_logs_numbered_backup(tmp_path: Path, monkeypatch) -> No
             (backup,),
         )
     ]
+
+
+def test_builder_logs_start_before_dispatch(tmp_path: Path, monkeypatch) -> None:
+    input_dir = tmp_path / "configuration_cf_src"
+    output_file = tmp_path / "configuration.cf"
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    monkeypatch.setattr(
+        build.logger,
+        "info",
+        lambda message, *args: calls.append((message, args)),
+    )
+    monkeypatch.setattr(
+        build.Builder,
+        "_run_cf_cfe_build",
+        lambda self, input_path, output_path: calls.append(
+            ("dispatch", (input_path, output_path))
+        ),
+    )
+
+    builder = object.__new__(build.Builder)
+    builder.run(input_dir, output_file)
+
+    assert calls == [
+        (
+            "Начинаю сборку контейнера '{}' из '{}'",
+            (output_file, input_dir),
+        ),
+        ("dispatch", (input_dir, output_file)),
+    ]

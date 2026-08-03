@@ -195,6 +195,11 @@ class Builder(Processor):
         output_file_path = _resolve_output_path(input_dir_path, output_path)
         if not do_not_backup and output_file_path.exists() and output_file_path.is_file():
             _backup_existing(output_file_path)
+        logger.info(
+            "Начинаю сборку контейнера '{}' из '{}'",
+            output_file_path,
+            input_dir_path,
+        )
 
         suffix = output_file_path.suffix.lower()
         if suffix in EXTENSIONS_EPF_ERF:
