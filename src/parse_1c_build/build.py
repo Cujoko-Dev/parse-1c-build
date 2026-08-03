@@ -50,6 +50,7 @@ def _backup_existing(path: Path) -> None:
             break
         n += 1
     path.rename(bak)
+    logger.info("Существующий выходной файл перемещён в резервную копию: '{}'", bak)
 
 
 def _input_dirs_get() -> list[Path]:

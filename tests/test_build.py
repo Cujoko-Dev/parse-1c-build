@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from parse_1c_build import bsl
+from parse_1c_build import bsl, build
 from parse_1c_build.build import run as build_run
 from parse_1c_build.cli import get_argparser
 from parse_1c_build.parse import run as parse_run
@@ -177,3 +177,27 @@ def test_build_2(test, tmpdir):
 
         assert exc.type == SystemExit
         assert exc.value.code == 1
+
+
+def test_backup_existing_logs_numbered_backup(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "configuration.cf"
+    output.write_bytes(b"current")
+    (tmp_path / "configuration.cf.1.bak").write_bytes(b"previous")
+    messages: list[tuple[str, tuple[object, ...]]] = []
+    monkeypatch.setattr(
+        build.logger,
+        "info",
+        lambda message, *args: messages.append((message, args)),
+    )
+
+    build._backup_existing(output)
+
+    backup = tmp_path / "configuration.cf.2.bak"
+    assert not output.exists()
+    assert backup.read_bytes() == b"current"
+    assert messages == [
+        (
+            "Существующий выходной файл перемещён в резервную копию: '{}'",
+            (backup,),
+        )
+    ]
