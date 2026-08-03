@@ -20,7 +20,8 @@ alwaysApply: true
 - Local external working notes for the project: context, decisions, drafts, plans and raw imported notes.
 - Junction typically points outside the repository, for example `D:\Notes\Work\_Dev\...\<project-name>`.
 - For external notes policy, see `AGENTS.md` section "External project notes".
-- Prefer curated current context in `.notes/00-current/`.
-- Treat notes outside `.notes/00-current/` as non-authoritative unless they have explicit metadata such as `status: active` or `status: reference`.
+- Prefer curated current context in `.notes/_current.md`.
+- Treat other notes as non-authoritative unless they have explicit metadata such as `status: active` or `status: reference`.
+- Working folders: `00-inbox/`, `10-urgent/`, `20-active/`, `30-someday/`, `90-archive/`.
 - Source code, tests, configs, build scripts and repository files override external notes.
 - If `.notes/` is absent, do not require it in CI or on other machines.
