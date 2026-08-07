@@ -12,7 +12,7 @@ alwaysApply: true
 - Временные файлы **этого** проекта: отладочный вывод, промежуточные артефакты, ручные эксперименты.
 - Junction указывает на каталог вне репозитория (типично `D:\Temp\<имя-проекта>`).
 - Если `.temp/` есть — предпочитать его вместо каталогов `tmp`, `temp`, `test_output` и т. п. внутри отслеживаемого дерева проекта.
-- Если junction нет — использовать системный temp (`tempfile.mkdtemp()`, `tempfile.TemporaryDirectory()`).
+- Если junction нет — использовать системный temp (Python: `tempfile.mkdtemp()`, `tempfile.TemporaryDirectory()`; PowerShell: `$env:TEMP`, `[System.IO.Path]::GetTempPath()`).
 - Не коммитить содержимое `.temp/`.
 
 ## `.notes/`

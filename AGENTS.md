@@ -29,6 +29,8 @@ Do not run `pytest`, `python -m pytest`, `pdm run pytest`, or 1C commands direct
 
 Safe read-only inspection commands such as `git status`, `git diff`, `rg`, `Get-Content`, `ls`, and `dir` are fine directly.
 
+<!-- agent-rules:begin | управляется sync-agent-rules.py, правьте dev-utils/agent-rules/ -->
+
 ## External project notes
 
 This project may have a `.notes` directory that points to external working notes.
@@ -44,3 +46,26 @@ Rules for using `.notes`:
 - Source code, tests, configs, migrations, build scripts and repository files override external notes.
 - If an external note conflicts with repository files, do not silently follow the note. Mention the conflict and prefer the repository.
 - Do not perform large changes based only on old notes. First verify against current code and current project instructions.
+
+## Python dependencies: PDM without uv
+
+Dependencies and the lock file go through PDM only (`pdm add`, `pdm update`, `pdm sync`).
+
+`PDM_USE_UV` must stay **unset** in every environment — Windows, WSL and the dev
+container alike. The uv resolver does not support PDM's `inherit_metadata` lock
+strategy and silently discards it. When that happens, `requires_python` and `groups`
+disappear from every entry in `pdm.lock`, so the lock no longer records which group a
+package belongs to. Updating a single package rewrites roughly 600 lines.
+
+A mixed setup is the worst case: with uv enabled on one machine and disabled on
+another, `pdm.lock` flips between `strategy = ["inherit_metadata"]` and
+`strategy = []` on every update, producing conflicts across the whole file.
+
+`PDM_USE_UV` is an environment variable and overrides a per-project `pdm.toml`, so the
+setting cannot be pinned inside the repository. Check the environment before locking:
+
+```sh
+pdm config use_uv   # must report False
+```
+
+<!-- agent-rules:end -->
