@@ -22,6 +22,7 @@ alwaysApply: true
 - For external notes policy, see `AGENTS.md` section "External project notes".
 - Prefer curated current context in `.notes/_current.md`.
 - Treat other notes as non-authoritative unless they have explicit metadata such as `status: active` or `status: reference`.
-- Working folders: `00-inbox/`, `10-urgent/`, `20-active/`, `30-someday/`, `90-archive/`.
+- Working folders: `00-inbox/`, `10-urgent/`, `20-active/`, `30-someday/`, `80-completed/`, `90-archive/`.
+- `80-completed/` — closed tasks; `90-archive/` — reference, dumps and historical material.
 - Source code, tests, configs, build scripts and repository files override external notes.
 - If `.notes/` is absent, do not require it in CI or on other machines.
