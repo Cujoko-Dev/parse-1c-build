@@ -135,10 +135,14 @@ class Builder(Processor):
         self,
         input_dir_path: Path,
         output_file_path: Path,
+        force: bool = False,
     ) -> None:
         """Build EPF/ERF from source directory via v8unpack -B."""
         source_dir = self._get_source_dir_for_epf_build(input_dir_path)
-        args = [str(self.get_v8_unpack_file_path()), "-B", str(source_dir), str(output_file_path)]
+        args = [str(self.get_v8_unpack_file_path())]
+        if force:
+            args.append("--force")
+        args += ["-B", str(source_dir), str(output_file_path)]
         check_silent(args)
         logger.info(f"'{output_file_path}' built from '{input_dir_path}'")
 
@@ -146,6 +150,7 @@ class Builder(Processor):
         self,
         input_dir_path: Path,
         output_file_path: Path,
+        force: bool = False,
     ) -> None:
         """Build CF/CFE from organized or raw source directory via v8unpack -B."""
         if self.use_reader:
@@ -160,12 +165,10 @@ class Builder(Processor):
             )
         else:
             source_dir = input_dir_path
-        args = [
-            str(self.get_v8_unpack_file_path()),
-            "-B",
-            str(source_dir),
-            str(output_file_path),
-        ]
+        args = [str(self.get_v8_unpack_file_path())]
+        if force:
+            args.append("--force")
+        args += ["-B", str(source_dir), str(output_file_path)]
         check_silent(args)
         logger.info(f"'{output_file_path}' built from '{input_dir_path}'")
 
@@ -201,11 +204,16 @@ class Builder(Processor):
             input_dir_path,
         )
 
+        # Без бэкапа существующий выходной файл остаётся на месте, а v8unpack без
+        # --force отказывается его перезаписывать. Бэкап же освобождает путь сам:
+        # он переносит старый файл в .bak
+        force = do_not_backup
+
         suffix = output_file_path.suffix.lower()
         if suffix in EXTENSIONS_EPF_ERF:
-            self._run_epf_erf_build(input_dir_path, output_file_path)
+            self._run_epf_erf_build(input_dir_path, output_file_path, force)
         elif suffix in EXTENSIONS_CF_CFE:
-            self._run_cf_cfe_build(input_dir_path, output_file_path)
+            self._run_cf_cfe_build(input_dir_path, output_file_path, force)
         elif suffix in EXTENSIONS_MD_ERT:
             self._run_md_ert_build(input_dir_path, output_file_path)
         else:

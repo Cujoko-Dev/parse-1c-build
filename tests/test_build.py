@@ -215,7 +215,7 @@ def test_builder_logs_start_before_dispatch(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(
         build.Builder,
         "_run_cf_cfe_build",
-        lambda self, input_path, output_path: calls.append(
+        lambda self, input_path, output_path, force=False: calls.append(
             ("dispatch", (input_path, output_path))
         ),
     )
@@ -230,3 +230,24 @@ def test_builder_logs_start_before_dispatch(tmp_path: Path, monkeypatch) -> None
         ),
         ("dispatch", (input_dir, output_file)),
     ]
+
+
+@pytest.mark.parametrize("do_not_backup", [False, True])
+def test_builder_forces_overwrite_only_without_backup(
+    tmp_path: Path, monkeypatch, do_not_backup: bool
+) -> None:
+    """Без бэкапа путь остаётся занятым, поэтому v8unpack зовётся с --force."""
+    input_dir = tmp_path / "configuration_cf_src"
+    output_file = tmp_path / "configuration.cf"
+    output_file.write_bytes(b"current")
+    forces: list[bool] = []
+    monkeypatch.setattr(
+        build.Builder,
+        "_run_cf_cfe_build",
+        lambda self, input_path, output_path, force=False: forces.append(force),
+    )
+
+    builder = object.__new__(build.Builder)
+    builder.run(input_dir, output_file, do_not_backup=do_not_backup)
+
+    assert forces == [do_not_backup]
