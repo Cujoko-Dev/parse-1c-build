@@ -6,7 +6,7 @@ requires = ["pdm-backend"]
 dev = [
     "debugpy>=1.8.2",
     "maturin<2.0,>=1.7",
-    "pyinstaller>=6.0.0",
+    "pyinstaller>=6.21.0",
     "pytest>=9.0.2",
 ]
 
@@ -32,7 +32,7 @@ dynamic = ["version"]
 keywords = ["1c", "parse", "build", "v8reader", "v8unpack", "gcomp"]
 license = {text = "MIT"}
 name = "parse-1c-build"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.16"
 
 [project.scripts]
 p1cb = "parse_1c_build.__main__:run"
