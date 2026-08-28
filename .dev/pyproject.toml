@@ -8,6 +8,8 @@ dev = [
     "maturin<2.0,>=1.7",
     "pyinstaller>=6.21.0",
     "pytest>=9.0.2",
+    "-e file:///${PROJECT_ROOT}/../../commons/.dev#egg=cjk-commons",
+    "-e file:///${PROJECT_ROOT}/../../commons-1c/.dev#egg=commons-1c",
 ]
 
 [project]
@@ -42,12 +44,6 @@ repository = "https://github.com/cujoko-dev/parse-1c-build"
 
 [tool.pdm.build]
 package-dir = "../src"
-
-[tool.pdm.dev-dependencies]
-dev = [
-    "-e file:///${PROJECT_ROOT}/../../commons/.dev#egg=cjk-commons",
-    "-e file:///${PROJECT_ROOT}/../../commons-1c/.dev#egg=commons-1c",
-]
 
 [tool.pdm.scripts]
 build-native-rust = { cmd = "maturin develop --release --uv --manifest-path ../rust/p1cb_native/Cargo.toml", working_dir = "." }
