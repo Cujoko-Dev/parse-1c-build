@@ -20,4 +20,5 @@
 # cmd.exe разбирает многострочные конструкции и метки goto по CRLF.
 *.bat                text eol=crlf
 *.cmd                text eol=crlf
+*.exe                binary
 # gitattributes:end

@@ -12,7 +12,11 @@
 Для *cf*/*cfe* — корень `bin`/`meta`/`objects` плюс модули конфигурации (`0_`/`1_`/`2_`/`9_`);
 объекты метаданных — в `objects/Catalogs|Documents|…/Имя/` (английские имена классов 1С).
 
-Пути к сервисной информационной базе, *V8Reader.epf*, *v8unpack.exe* и GComp указываются в файле настроек 
+На Windows *v8unpack.exe* входит в пакет (`parse_1c_build/vendor/`) и используется по умолчанию,
+чтобы не подхватить чужую копию из PATH или из пользовательского *settings.yaml*.
+Явный `v8unpack_file_path` в коде по-прежнему перекрывает встроенный файл.
+
+Пути к сервисной информационной базе, *V8Reader.epf* и GComp указываются в файле настроек 
 *settings.yaml*, который сначала ищется в текущем каталоге, затем в каталоге данных приложения пользователя 
 (в Windows 10 каталог *C:\Users\\<Пользователь>\AppData\Roaming\util-1c\parse-1c-build\>*), а затем в общем каталоге 
 данных приложения (в Windows 10 каталог *C:\ProgramData\util-1c\parse-1c-build\>*). Если путь к платформе 
@@ -23,7 +27,7 @@
 - Windows
 - Python 3.10 и выше. Каталоги интерпретатора и скриптов Python должны быть прописаны в переменной окружения Path
 - Для работы с *epf*-, *erf*-, *cf*- и *cfe*-файлами:
-  - [V8Unpack][2]
+  - встроенный [V8Unpack][2] (Windows); на других платформах — `v8unpack` рядом с интерпретатором или `v8unpack_file` в настройках
   - (опционально, deprecated) платформа 1С:Предприятие 8.3, сервисная ИБ и [V8Reader][1] — только для *epf*/*erf* с `--use-reader`
 - Для работы *ert*- и *md*-файлами:
   - [GComp][3]
@@ -47,5 +51,5 @@ C:\Dev\PowerShell\dev-utils\install-pipx-editable.ps1
 Локальные зависимости должны указывать на корни проектов, а не на их `.dev`: editable-режим тогда смотрит на `src`, а metadata берётся из основного `pyproject.toml`. Флаг `--no-deps` важен, чтобы одна локальная зависимость не переустановила другую обратно в обычном режиме.
 
 [1]: https://github.com/xDrivenDevelopment/v8Reader
-[2]: https://github.com/e8tools/v8unpack
+[2]: https://github.com/cujoko/v8unpack
 [3]: http://1c.alterplast.ru/gcomp/

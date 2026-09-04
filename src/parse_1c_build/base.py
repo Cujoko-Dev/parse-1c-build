@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from cjk_commons.settings import get_attribute, get_path_attribute, get_settings
@@ -14,6 +15,15 @@ USE_READER_DEPRECATED_MSG = (
     "--use-reader is deprecated and will be removed; "
     "it only applies to .epf/.erf (V8Reader)"
 )
+
+
+def bundled_v8unpack_path() -> Path | None:
+    """Return the v8unpack binary shipped with this package, if present."""
+    name = "v8unpack.exe" if sys.platform == "win32" else "v8unpack"
+    candidate = Path(__file__).resolve().parent / "vendor" / name
+    if candidate.is_file():
+        return candidate
+    return None
 
 
 class Processor:
@@ -43,6 +53,21 @@ class Processor:
             self._use_reader_warned = True
 
     def get_v8_unpack_file_path(self, **kwargs) -> Path:
+        if "v8unpack_file_path" in kwargs:
+            return get_path_attribute(
+                kwargs,
+                "v8unpack_file_path",
+                is_dir=False,
+                check_if_exists=False,
+            )
+        bundled = bundled_v8unpack_path()
+        if bundled is not None:
+            return bundled
+        sibling = Path(sys.executable).with_name(
+            "v8unpack.exe" if sys.platform == "win32" else "v8unpack"
+        )
+        if sibling.is_file():
+            return sibling.resolve()
         return get_path_attribute(
             kwargs,
             "v8unpack_file_path",
