@@ -50,3 +50,12 @@ tests/local-fixtures/*
 
 # Rust / maturin
 rust/**/target/
+
+# agent-rules:begin | управляется sync-agent-rules.py, правьте dev-utils/agent-rules/
+# .claude/skills/<name> — символические ссылки на .agents/skills/<name>. Канон
+# лежит в .agents/skills и коммитится, ссылки раскладывает sync-agent-rules.py
+# на каждой машине. В git они не хранятся: симлинк восстанавливается при
+# checkout только там, где включён core.symlinks, а это настройка установщика,
+# а не репозитория.
+.claude/skills/
+# agent-rules:end
