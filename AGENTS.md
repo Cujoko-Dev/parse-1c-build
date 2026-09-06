@@ -1,4 +1,4 @@
-# Codex Agent Notes
+# Agent Notes
 
 Shared agent guidance lives in `AGENTS.md` (this file) and `.agents/skills/`.
 `CLAUDE.md` imports this file. Cursor, Codex, and Claude Code all read it.
