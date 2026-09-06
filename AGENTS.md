@@ -11,21 +11,12 @@ Shared agent guidance lives in `AGENTS.md` (this file) and `.agents/skills/`.
 
 ## Project-specific Cursor rules
 
-- `.cursor/rules/terminal-test-execution-policy.mdc` before running tests, builds, 1C, or long-running commands.
 - `.cursor/rules/bsl-forms.mdc` before changing BSL form parsing, form files, or related fixtures.
-- `.cursor/rules/no-temp-in-project.mdc` before creating temporary files or generated artifacts.
 
 ## Skills To Check
 
 - `.agents/skills/parse-1c-build-architecture/SKILL.md` for parser architecture, build parsing flow, and larger design changes.
 - `.agents/skills/pdm-dev-workflow/SKILL.md` for PDM-based development workflow.
-
-## Test And Terminal Policy
-
-For tests, builds, 1C launches, or long-running commands, use `.\scripts\run.ps1` as described in `.cursor/rules/terminal-test-execution-policy.mdc`.
-Do not run `pytest`, `python -m pytest`, `pdm run pytest`, or 1C commands directly for those workflows.
-
-Safe read-only inspection commands such as `git status`, `git diff`, `rg`, `Get-Content`, `ls`, and `dir` are fine directly.
 
 <!-- agent-rules:begin | управляется sync-agent-rules.py, правьте dev-utils/agent-rules/ -->
 
@@ -60,6 +51,9 @@ The project root on a developer machine may contain **junction** directories
 - If the junction is absent, use the system temp directory (Python:
   `tempfile.mkdtemp()`, `tempfile.TemporaryDirectory()`; PowerShell: `$env:TEMP`,
   `[System.IO.Path]::GetTempPath()`).
+- Output of a transformation or build — obfuscation, parsing, conversion,
+  normalization — goes there too. Never write it into tracked test data or
+  fixtures.
 - Do not commit `.temp/` contents.
 
 ### `.notes/`
@@ -125,7 +119,8 @@ migrations, generators, one-off scripts, and `python -c`.
 ## Environment and testing
 
 - Run Python and tests with `pdm run -p .dev ...`. Do not activate the venv by
-  hand.
+  hand. If a section below names a run wrapper for this repository, that wrapper
+  is the only entry point and overrides this line.
 - Do not edit test files unless the user asked, or the change is impossible
   without touching tests.
 
@@ -142,5 +137,43 @@ If no files were changed, do not suggest a commit message.
 Each message must be concise, imperative, and aligned with repository style.
 This is a suggestion only. Creating a commit is a separate explicit request
 (`/cm` or `$cm`).
+
+## Test and build runs go through `scripts/run.ps1`
+
+This repository has a wrapper at `scripts/run.ps1`, and it is the only entry
+point for a test, build, UI automation, 1C launch, or any other long-running
+command. Where this section is present it **overrides** the general testing
+rule above: the wrapper wins over calling the test runner yourself.
+
+- Do not run these directly for a test, build, or debug workflow: `pytest`,
+  `python -m pytest`, `pdm run pytest`, `pdm run -p .dev pytest`, `1cv8`,
+  `1cv8c`, PowerShell holding inline automation logic, `cmd /c` used to
+  orchestrate tests, or any retry loop in the terminal.
+- Direct terminal commands are limited to safe read-only inspection:
+  `git status`, `git diff`, `git log --oneline -n 20`, `rg`, `Get-Content`,
+  `ls`, `dir`.
+- Pass the target test command to the wrapper through its parameters.
+- After each run: inspect the exit code, then the log it produced, and only
+  then decide the next step.
+- Do not start a new run while the previous one reported a timeout, a cleanup
+  failure, or a still-running child process.
+- Do not spawn background processes unless the user asked for them.
+- No "run until green" loop: run once, inspect the failure, change the code,
+  run again.
+- Explain why before changing `scripts/run.ps1`.
+
+### What the wrapper may and may not do
+
+It runs a command in an isolated PowerShell process, captures stdout and stderr
+into log files, enforces a timeout, and on timeout terminates **only** the child
+process tree (`taskkill /T`).
+
+- It must never clean up globally: no killing by process name (`python`,
+  `node`, `1cv8`), no scanning the system for "similar" processes, no
+  command-line pattern matching to pick kill targets, no heuristic cleanup
+  outside its own process tree.
+- Only processes the wrapper started may be managed by it.
+- A process that survives the timeout is a bug in how it was spawned — not a
+  reason to widen the cleanup.
 
 <!-- agent-rules:end -->
